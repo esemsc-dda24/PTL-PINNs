@@ -1,0 +1,28 @@
+import numpy as np
+import torch
+
+def ode_oscillator(forcing, w_0=1, epsilon=0, q = 3, zeta = 0, numpy=True):
+    """
+    General 2D formulation of a nonlinear oscillator (linear when epsilon = 0).
+
+    Returns:
+        function
+    """
+
+    def ode(t, y):
+        force = forcing(t)
+        if numpy:
+            return np.array([
+                y[1] + force[1],
+                - (w_0 ** 2) * y[0] - epsilon * (y[0] ** q) - (2*w_0*zeta) * y[1] + force[0]
+            ])
+        else:
+            return torch.stack([
+                y[1] + force[1],
+                - (w_0 ** 2) * y[0] - epsilon * (y[0] ** q) - (2*w_0*zeta) * y[1] + force[0]])
+    return ode
+
+def equation_oscillator(w_0=1.0, epsilon=0.0, zeta=0):
+    def equation(y1, y2):
+        return torch.stack((-y2, (w_0 ** 2) * y1 + epsilon * (y1 ** 3) + (2*w_0*zeta) * y2), dim = 1)
+    return equation
