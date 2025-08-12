@@ -4,6 +4,16 @@ from neurodiffeq import diff
 import torch.nn.functional as F
 import torch
 import matplotlib.pyplot as plt
+from neurodiffeq.generators import Generator1D
+
+def generate_eval_tensor(N=512, t_span=(0, 1), require_grad=True):
+    generator = Generator1D(size=N, method="equally-spaced", t_min=t_span[0], t_max=t_span[1])
+    t = generator.get_examples().unsqueeze(1)  # (N, 1)
+    # convert this sample points into input to the network and requires gradients
+    t = t.cpu()
+    if require_grad:
+        t.requires_grad_()
+    return t
 
 def loss(model, N, t_span, equation_functions, initial_condition_functions,
          forcing_functions, ode_weight=1, ic_weight=1, method='equally-spaced-noisy'):
@@ -119,3 +129,24 @@ def plot_loss(loss_trace, ode_trace, ic_trace, path=None):
     fig.supylabel("Loss", fontsize=18)
     if path is not None:
         plt.savefig(path)
+
+def compare_training_solutions(NN_solution, linear_solution_list, t_eval, title_list, k):
+    fig, axes = plt.subplots(k, 2, figsize=(10, 3 * k), sharex=True)
+
+    for index in range(k):
+        # Left column: function comparison
+        axes[index, 0].plot(t_eval, NN_solution[index][:, 0], label="x(0) PINN", color="blue")
+        axes[index, 0].plot(t_eval, linear_solution_list[index][0], label="x(0) RK45", color="orange", linestyle="--")
+        axes[index, 0].set_title(f"{title_list[index]} - x")
+        axes[index, 0].legend()
+        axes[index, 0].grid(True)
+
+        # Right column: derivative comparison
+        axes[index, 1].plot(t_eval, NN_solution[index][:, 1], label="x'(0) PINN", color="green")
+        axes[index, 1].plot(t_eval, linear_solution_list[index][1], label="x'(0) RK45", color="red", linestyle="--")
+        axes[index, 1].set_title(f"{title_list[index]} - x'")
+        axes[index, 1].legend()
+        axes[index, 1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
