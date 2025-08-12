@@ -32,6 +32,7 @@ def ptl_config(path: str) -> Dict[str, Any]:
 
     w_list: List[float] = []
     zeta_list: List[float] = []
+    mu_list: List[float] = []
     forcing_freq: List[List[float]] = []
     forcing_coef: List[List[float]] = []
     ic_python_list: List[List[float]] = []
@@ -44,6 +45,7 @@ def ptl_config(path: str) -> Dict[str, Any]:
         if not (isinstance(ic, (list, tuple)) and len(ic) == 2):
             raise ValueError(f"Head {i}: 'ic' must be a 2-item list [x0, v0].")
 
+        mu = h.get("mu")
         forcing = h.get("forcing")
         freq = _as_list(forcing.get("freq"))
         coef = forcing.get("coef", [])
@@ -65,6 +67,7 @@ def ptl_config(path: str) -> Dict[str, Any]:
                     f"Head {i}: len(coef)={len(coefs)} must equal len(freq)={len(freq)}."
                 )
             
+        mu_list.append(mu)
         w_list.append(w0)
         zeta_list.append(zeta)
         ic_python_list.append([float(ic[0]), float(ic[1])])
@@ -81,6 +84,7 @@ def ptl_config(path: str) -> Dict[str, Any]:
         "seed": cfg.get("seed"),
         "w_list": w_list,
         "zeta_list": zeta_list,
+        "mu_list": mu_list,
         "forcing_freq": forcing_freq,
         "forcing_coef": forcing_coef,
         "ic_python_list": ic_python_list,

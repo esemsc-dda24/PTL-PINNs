@@ -71,7 +71,11 @@ def underdamped_1D(t, numpy: bool, w_0: List, coeff: List, mu: float, zeta: floa
     result = lib.zeros_like(t)
 
     for k in range(len(w_0)):
-        result += coeff[k] * lib.cos(w_0[k] * lib.sqrt(1 - zeta ** 2) * t) * lib.exp(- mu * zeta * t)
+        if numpy:
+            sqrt_term = lib.sqrt(1 - zeta ** 2)
+        else:
+            sqrt_term = lib.sqrt(torch.tensor(1 - zeta ** 2, dtype=t.dtype, device=t.device))
+        result += coeff[k] * lib.cos(w_0[k] * sqrt_term * t) * lib.exp(- mu * zeta * t)
 
     return result
 
