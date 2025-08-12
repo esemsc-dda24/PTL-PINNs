@@ -23,7 +23,6 @@ dependencies = [
   "numpy>=1.24.2",
   "scipy>=1.10.1",
   "matplotlib>=3.7.1",
-  "ipython>=8.12.0",
   "torch>=2.0.0",                  
   "neurodiffeq>=0.5.3",            
   "typing-extensions>=4.5.0"]
