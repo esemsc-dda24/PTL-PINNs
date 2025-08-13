@@ -93,9 +93,11 @@ We train a different model for the undamped, underdamped and overdamped regimes.
 
 ### Undamped 
 
-![Undamped training](figures/undamped.png)
+![Undamped training](figures/undamped_training.png)
 
 ### Underdamped
+
+![Underdamped training](figures/underdamped_training.png)
 
 ### Overdamped
 
