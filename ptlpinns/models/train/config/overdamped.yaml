@@ -1,0 +1,91 @@
+experiment: "overderdamped_k13"
+N: 5120           
+t_max: 20.0
+seed: 42           
+k: 14         
+
+
+defaults: &defaults
+  w0: 1.0
+  zeta: 0.0
+  ic: [0.0, 0.0]  
+  forcing: { freq: [1], coef: random }
+  mu: [0, 0, 0, 0]
+
+
+heads:
+  - <<: *defaults      # head 1
+    ic: [2.0, 0.0]
+    zeta: 5
+  - <<: *defaults      # head 2
+    ic: [1.0, 0.0]
+    zeta: 10
+  - <<: *defaults      # head 3
+    ic: [3.0, 0.0]
+    zeta: 20
+
+  - <<: *defaults      # head 4
+    ic: [3.0, 0.0]
+    zeta: 30
+
+  - <<: *defaults     # head 5
+    ic: [2.0, 0.0]
+    zeta: 40
+
+  - <<: *defaults   # head 6
+    ic: [1.0, 0.0]
+    zeta: 50
+
+  - <<: *defaults   # head 7
+    zeta: 60
+    ic: [2.0, 0.0]
+
+  - <<: *defaults   # head 8
+    zeta: 5
+    mu: [1, 0, 0, 1]
+
+  - <<: *defaults   # head 9
+    zeta: 30
+    mu: [1, 0, 0, 1]
+
+  - <<: *defaults   # head 10
+    zeta: 60
+    mu: [1, 0, 0, 1]
+
+  - <<: *defaults  # head 11
+    ic: [1.5, 0.0]
+    mu: [3, 2, 1, 3]
+    zeta: 10
+
+  - <<: *defaults   # head 12
+    ic: [1.0, 0.0]
+    zeta: 30
+    mu: [3, 1, 2, 3]
+
+
+  - <<: *defaults # head 13
+    ic: [2.0, 0.0]
+    zeta: 40
+    mu: [1, 0, 0, 1]
+    forcing: { freq: [3], coef: random }
+
+  - <<: *defaults  # head 14
+    zeta:  60
+    ic: [1.0, 0.0]
+    mu: [3, 0, 0, 3]
+    forcing: { freq: [5], coef: random }
+
+train:
+    'method': equally-spaced-noisy
+    'lr': 1e-3
+    'num_iter': 10000
+    'step_size': 500
+    'gamma': 0.96
+    'w_ode': 1.5
+    'w_ic': 1
+    'hidden_layers': [128, 128, 256]
+    'use_sine': True
+    'use_fourier': True
+    'n_frequencies': 16
+    'scale': 1.0
+    'bias': True

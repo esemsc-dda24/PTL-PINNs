@@ -79,7 +79,46 @@ def underdamped_1D(t, numpy: bool, w_0: List, coeff: List, mu: float, zeta: floa
 
     return result
 
-def overdamped_1st_order_1D(t, numpy, zeta, w_0, coeff):
+def overdamped_1D(t, numpy, zeta, mu, w_0, freq, coeff):
+    """
+    Computes the forcing function 1st-order overdamped correction
+    if there is no forcing.
+    """
+
+    if len(freq) != 1 or len(mu) != 4 or len(coeff) != 1:
+        raise ValueError("w_0 must be a list of length 1, mu must be a list of length 4,"
+        "and coeff must be a list of length 1.")
+
+    lib = np if numpy else torch
+
+    if numpy:
+        lambda_1 = - zeta * w_0 + w_0 * lib.sqrt(zeta ** 2 - 1)
+        lambda_2 = - zeta * w_0 - w_0 * lib.sqrt(zeta ** 2 - 1)
+    else:
+        lambda_1 = - zeta * w_0 + w_0 * lib.sqrt(torch.tensor(zeta ** 2 - 1, dtype=t.dtype, device=t.device))
+        lambda_2 = - zeta * w_0 - w_0 * lib.sqrt(torch.tensor(zeta ** 2 - 1, dtype=t.dtype, device=t.device))
+
+    result = (coeff[0] * lib.cos(freq[0] * t)) * (lib.exp(mu[0] * lambda_1 * t) + (lib.exp(mu[1] * lambda_1 * t + mu[2] * lambda_2 * t)) + lib.exp(mu[3] * lambda_2 * t))
+
+    return result
+
+def overdamped_2D(numpy, zeta, mu, w_0, freq, coeff):
+
+    def force(t):
+        if numpy:
+            if np.isscalar(t):
+                return np.array([overdamped_1D(t, numpy, zeta, mu, w_0, freq, coeff), 0.0])  # shape: (2,)
+            else:
+                return np.stack((overdamped_1D(t, numpy, zeta, mu, w_0, freq, coeff), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
+        else:
+            if torch.is_tensor(t) and t.dim() == 0:
+                return torch.tensor([overdamped_1D(t, numpy, zeta, mu, w_0, freq, coeff), 0.0])
+            else:
+                return torch.stack((overdamped_1D(t, numpy, zeta, mu, w_0, freq, coeff), torch.zeros_like(t)), dim=1)
+
+    return force
+
+def overdamped_1st_order_1D(t, numpy, zeta, w_0, ic):
     """
     Computes the forcing function of the general 1st-order equation of the overdamped system.
     """
@@ -87,12 +126,12 @@ def overdamped_1st_order_1D(t, numpy, zeta, w_0, coeff):
     lib = np if numpy else torch
     lambda_1 = - zeta * w_0 + lib.sqrt(zeta ** 2 - 1)
     lambda_2 = - zeta * w_0 - lib.sqrt(zeta ** 2 - 1)
-    coeff_1 = (coeff ** 3) * lambda_2 / (lambda_2 - lambda_1)
-    coeff_2 = (coeff ** 3) * lambda_1 / (lambda_1 - lambda_2)
+    coeff_1 = (ic ** 3) * lambda_2 / (lambda_2 - lambda_1)
+    coeff_2 = (ic ** 3) * lambda_1 / (lambda_1 - lambda_2)
 
     return coeff_1 * lib.exp(lambda_1 * t) + coeff_2 * lib.exp(lambda_2 * t)
 
-def overdamped_1st_order_2D(numpy: bool, zeta: float, w_0: List, coeff: List):
+def overdamped_1st_order_2D(numpy: bool, zeta: float, w_0: List, ic: List):
     """
     Computes the forcing function of the general 1st-order equation of the overdamped system in 2D
     """
@@ -100,14 +139,14 @@ def overdamped_1st_order_2D(numpy: bool, zeta: float, w_0: List, coeff: List):
     def force(t):
         if numpy:
             if np.isscalar(t):
-                return np.array([overdamped_1st_order_1D(t, numpy, zeta, w_0, coeff), 0.0])  # shape: (2,)
+                return np.array([overdamped_1st_order_1D(t, numpy, zeta, w_0, ic), 0.0])  # shape: (2,)
             else:
-                return np.stack((overdamped_1st_order_1D(t, numpy, w_0, coeff), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
+                return np.stack((overdamped_1st_order_1D(t, numpy, w_0, ic), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
         else:
             if torch.is_tensor(t) and t.dim() == 0:
-                return torch.tensor([overdamped_1st_order_1D(t, numpy, w_0, coeff), 0.0])
+                return torch.tensor([overdamped_1st_order_1D(t, numpy, w_0, ic), 0.0])
             else:
-                return torch.stack((overdamped_1st_order_1D(t, numpy, w_0, coeff), torch.zeros_like(t)), dim=1)
+                return torch.stack((overdamped_1st_order_1D(t, numpy, w_0, ic), torch.zeros_like(t)), dim=1)
 
     return force
 
