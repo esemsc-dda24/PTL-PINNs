@@ -1,6 +1,13 @@
 import numpy as np
 import torch
 
+def ode_oscillator_1D(w_0, zeta, forcing_1D):
+
+    def ode(t, y):
+        return np.array([y[1], - (w_0[0] ** 2) * y[0] - 2 * w_0[0] * zeta[0] * y[1] + forcing_1D(t)])
+    
+    return ode
+
 def ode_oscillator(forcing, w_0=1, epsilon=0, q = 3, zeta = 0, numpy=True):
     """
     General 2D formulation of a nonlinear oscillator (linear when epsilon = 0).
