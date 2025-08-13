@@ -1,6 +1,6 @@
 experiment: "overderdamped_k13"
-N: 5120           
-t_max: 20.0
+N: 8000           
+t_max: 25.0
 seed: 42           
 k: 14         
 
@@ -78,14 +78,12 @@ heads:
 train:
     'method': equally-spaced-noisy
     'lr': 1e-3
-    'num_iter': 10000
-    'step_size': 500
+    'num_iter': 20000
+    'step_size': 800
     'gamma': 0.96
     'w_ode': 1.5
     'w_ic': 1
     'hidden_layers': [128, 128, 256]
     'use_sine': True
-    'use_fourier': True
-    'n_frequencies': 16
-    'scale': 1.0
+    'use_fourier': False
     'bias': True
