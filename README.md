@@ -101,5 +101,6 @@ We train a different model for the undamped, underdamped and overdamped regimes.
 
 ### Overdamped
 
+![Overdamped training](figures/overdamped_training.png)
 
 ---

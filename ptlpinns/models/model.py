@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import json
 
 
 class SineLayer(nn.Module):
@@ -71,3 +72,20 @@ class Multihead_model_fourier(nn.Module):
             concat = torch.cat((first, second), axis=1)
             output.append(concat)
         return torch.stack(output), out
+
+
+def load_model(path, name):
+
+    with open(f'{path}/training_log.json', 'r') as f:
+        training_log = json.load(f)
+
+    k = training_log['k']
+    bias = training_log['bias']
+    use_sine = training_log['use_sine']
+    use_fourier = training_log['use_fourier']
+    scale = training_log['scale']
+    n_frequencies = training_log['n_frequencies']
+    hidden_layers = training_log['hidden_layers']
+
+    pinn = Multihead_model_fourier(k=k, bias=bias, use_sine=use_sine, use_fourier=use_fourier, scale=scale, n_frequencies=n_frequencies, HIDDEN_LAYERS=hidden_layers)
+    pinn.load_state_dict(torch.load(f'{path}/{name}'))
