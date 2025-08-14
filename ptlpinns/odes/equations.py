@@ -1,10 +1,10 @@
 import numpy as np
 import torch
 
-def ode_oscillator_1D(w_0, zeta, forcing_1D):
+def ode_oscillator_1D(w_0, zeta, forcing_1D, q, epsilon):
 
     def ode(t, y):
-        return np.array([y[1], - (w_0 ** 2) * y[0] - 2 * w_0 * zeta * y[1] + forcing_1D(t)])
+        return np.array([y[1], - (w_0 ** 2) * y[0] - 2 * w_0 * zeta * y[1] - epsilon * (y[0] ** q) + forcing_1D(t)])
     
     return ode
 

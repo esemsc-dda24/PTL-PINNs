@@ -26,7 +26,7 @@ heads:
 
   - <<: *defaults
     ic: [0.5, 0.0]
-    forcing: { freq: [3], coef: [1.0] }
+    forcing: { freq: [3], coef: [-0.25] }
 
   - <<: *defaults
     ic: [1.0, 0.0]

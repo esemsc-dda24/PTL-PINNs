@@ -2,6 +2,16 @@ import numpy as np
 from matplotlib import pyplot as plt
 from typing import List
 import matplotlib as mpl
+from ptlpinns.perturbation import standard
+from ptlpinns.odes import equations, numerical
+from scipy.signal import find_peaks
+
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["DejaVu Serif"],
+    "mathtext.fontset": "cm",
+    "text.usetex": False,
+})
 
 def relative_error(values: List[np.ndarray]) -> np.ndarray:
     """
@@ -37,7 +47,7 @@ def w_absolute_error(w_series: List[np.ndarray], w_teor: float) -> np.ndarray:
     color2 = cmap(0.8)
 
     frequency_error = np.abs(w_series - w_teor)
-    steps = np.arange(1, len(frequency_error) + 1)
+    steps = np.arange(0, len(frequency_error))
 
     plt.figure(figsize=(8, 4))
     plt.plot(
@@ -53,3 +63,147 @@ def w_absolute_error(w_series: List[np.ndarray], w_teor: float) -> np.ndarray:
 
     plt.tight_layout()
     plt.show()
+
+def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
+    """
+    Calculates the order-N contribution of ε * (x ** q)
+
+    Parameters:
+        N (int): the perturbation order
+        x (List[np.ndarray]): list of x_0, x_1, ..., x_{N-1}
+        power (int): the power of x in the nonlinearity (e.g., 3 for x³, 5 for x⁵)
+
+    Returns:
+        np.ndarray: ε * x^power term at order N
+    """
+    index_list = standard.index_tuples(N, power)
+    result = np.zeros_like(x[0])
+    for indices in index_list:
+        term = standard.number_combinations(indices)
+        for i in indices:
+            term *= x[i]
+        result += term
+    return result
+
+def calc_A(N: int, x_ddot: List[np.ndarray], w_list: List)-> List[np.ndarray]:
+    """
+    Calculates A(x_{0}, ..., x_{N-1}, w_{0}, ..., w_{N - 1})
+
+    Returns
+        np.ndarray: Numpy array with A's values
+    """
+    A_term = np.zeros_like(x_ddot[0])
+    for k in range(1, N + 1): # ddot_x_N can't be calculated
+        x_ddot_nk = x_ddot[N - k]
+        for i in range(k + 1):
+            if i == N or (k - i) == N: # 2 w_0 * w_N * ddot x_0 can't be calculated
+                continue
+            A_term += x_ddot_nk * w_list[i] * w_list[k - i] 
+
+    return A_term
+
+def calc_B(N: int, x_ddot: List[np.ndarray], x: List[np.ndarray], w_list: List, power: int = 3):
+    epsilon_cubed_term = - epsilon_x_power(N, x, power)
+    A_term = - calc_A(N, x_ddot, w_list)
+    return A_term + epsilon_cubed_term
+
+def calc_w_n(w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], t: np.ndarray, power = 3) -> int:
+    """
+    Calcultes the frequency correction for order n using quantities of order n - 1
+
+    Returns:
+        int: Frequency correction for order n
+    """
+
+    mask    = (t >= 0) & (t <= 2*np.pi)
+    t_seg   = t[mask]    
+
+    x_seg = [term[mask] for term in x]
+    x_ddot_seg = [term[mask] for term in x_ddot] 
+
+
+    B = calc_B(N=len(x_ddot), x_ddot = x_ddot_seg, x = x_seg, w_list=w_list, power=power)
+    K = 2 * x_ddot_seg[0] / w_list[0]
+
+    num = np.trapezoid(B * (np.cos(t_seg)), x=t_seg)
+    den = np.trapezoid(K * (np.cos(t_seg)), x=t_seg)
+
+    w_n = num / den
+
+    return w_n
+
+def calculate_forcing(w_n: float, w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], power = 3) -> np.ndarray:
+    """"
+    Calculates forcing for order n differential equation. Depends only on x and w from order 0 to n - 1.
+    """
+
+    B_term = calc_B(len(x_ddot), x_ddot, x, w_list, power)
+    w_n_term = - 2 * w_n * x_ddot[0] / w_list[0]
+
+    return w_n_term + B_term
+
+def calculate_w_series(values: List[float], epsilon: float, rwtol = 1e-6) -> List[np.ndarray]:
+    """
+    For an array of values with `n` corrections (x or w or x') returns a List
+    where index `n` is the series up to `n`
+
+    Returns:
+        List[np.ndarray]: List of the series corrections ranging from `0` to `n` order
+    """
+    w_0 = values[0]
+
+    solution = w_0
+    series = [w_0]
+    last_delta = 3 * w_0 
+
+    for i in range(1, len(values)):
+        solution_old = solution
+        solution += (epsilon ** i) * values[i] 
+        new_delta = np.abs(solution - solution_old)
+
+        if (new_delta > last_delta):
+            print(f"series has diverged for order p = {i}")
+            break
+
+        if new_delta < rwtol:
+            print(f"series has converged for order p = {i - 1} under tolerance {rwtol}")
+            break
+        
+        last_delta = new_delta 
+        series.append(solution)
+
+    return series
+
+def estimate_period_frequency(w_0, zeta, ic, q, epsilon, t_eval = np.linspace(0, 4 * np.pi, 10000)):
+    """
+    Can be used to estimate the period and frequency of a periodic signal
+
+    Returns:
+        T_avg (float): Average period of the signal
+        omega (float): Frequency of the signal
+    """
+
+    ode = equations.ode_oscillator_1D(w_0=w_0, zeta=zeta, forcing_1D=lambda t: np.zeros_like(t), q=q, epsilon=epsilon)
+    x_t = numerical.solve_ode_equation(ode, (t_eval[0], t_eval[-1]), t_eval, ic)[0]
+
+    peak_indices, _ = find_peaks(x_t)
+    
+    if len(peak_indices) < 2:
+        raise ValueError("Not enough peaks to estimate the period.")
+
+    # Get corresponding times
+    peak_times = t_eval[peak_indices]
+
+    # Compute differences between consecutive peaks
+    periods = np.diff(peak_times)
+    T_avg = np.mean(periods)
+    omega = 2 * np.pi / T_avg
+
+    return T_avg, omega
+
+def t_eval_lpm(t_eval, w_final):
+    t_eval_lpm = t_eval / w_final
+    mask = (t_eval >= 0) & (t_eval <= t_eval_lpm[-1])
+    t_eval_standard = t_eval[mask]
+
+    return t_eval_lpm, t_eval_standard
