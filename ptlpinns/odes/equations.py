@@ -4,7 +4,7 @@ import torch
 def ode_oscillator_1D(w_0, zeta, forcing_1D):
 
     def ode(t, y):
-        return np.array([y[1], - (w_0[0] ** 2) * y[0] - 2 * w_0[0] * zeta[0] * y[1] + forcing_1D(t)])
+        return np.array([y[1], - (w_0 ** 2) * y[0] - 2 * w_0 * zeta * y[1] + forcing_1D(t)])
     
     return ode
 

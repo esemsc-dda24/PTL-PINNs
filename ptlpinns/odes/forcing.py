@@ -150,6 +150,22 @@ def overdamped_1st_order_2D(numpy: bool, zeta: float, w_0: List, ic: List):
 
     return force
 
+def zeroes_2D(numpy: bool):
+
+    def force(t):
+        if numpy:
+            if np.isscalar(t):
+                return np.array([0.0, 0.0])  # shape: (2,)
+            else:
+                return np.stack((np.zeros_like(t), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
+        else:
+            if torch.is_tensor(t) and t.dim() == 0:
+                return torch.tensor([0.0, 0.0])
+            else:
+                return torch.stack((torch.zeros_like(t), torch.zeros_like(t)), dim=1)
+
+    return force
+
 def sum_cosine_forcing(numpy: bool, w_0: List, coeff: List):
     """
     Returns a 2D sum of cosine forcing function for numpy or torch tensors
