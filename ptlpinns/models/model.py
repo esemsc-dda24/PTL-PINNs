@@ -87,6 +87,12 @@ def load_model(path, name):
     n_frequencies = training_log['n_frequencies']
     hidden_layers = training_log['hidden_layers']
 
-    pinn = Multihead_model_fourier(k=k, bias=bias, use_sine=use_sine, use_fourier=use_fourier, scale=scale, n_frequencies=n_frequencies, HIDDEN_LAYERS=hidden_layers)
+    if use_fourier:
+        pinn = Multihead_model_fourier(k=k, bias=bias, use_sine=use_sine, use_fourier=use_fourier, scale=scale, n_frequencies=n_frequencies, HIDDEN_LAYERS=hidden_layers)
+    else:
+        print(k, bias, use_sine, use_fourier, hidden_layers)
+        pinn = Multihead_model_fourier(k=k, bias=bias, use_sine=use_sine, HIDDEN_LAYERS=hidden_layers)
+
     pinn.load_state_dict(torch.load(f'{path}/{name}'))
+
     return pinn, training_log

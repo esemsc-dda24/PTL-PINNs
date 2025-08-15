@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from scipy.integrate import cumulative_trapezoid
-from matplotlib.ticker import MultipleLocator, MaxNLocator
+from matplotlib.ticker import MultipleLocator, MaxNLocator, FuncFormatter
 from typing import List
 from collections import Counter
 from math import factorial
@@ -226,4 +226,50 @@ def plot_comparison_standard_vs_lpm(t_eval, t_eval_lpm, perturbation_solution_st
 
     # --- Layout adjustments ---
     plt.tight_layout(rect=[0, 0, 1, 0.86])
+    plt.show()
+
+
+
+def plot_IAE_multiple_zeta(zeta_list, t_eval, NN_TL_solution_list, numerical_undamped_duffing_list):
+
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    # Colormap: one color per zeta value
+    cmap = plt.cm.viridis
+    colors = cmap(np.linspace(0, 1, len(zeta_list)))
+
+    for i, zeta in enumerate(zeta_list):
+        error = abs(NN_TL_solution_list[:, i, 0] - numerical_undamped_duffing_list[i][0])
+        print(f'zeta: {zeta}, mean Error: {np.mean(error):.3e}')
+        
+        cumulative_error = cumulative_trapezoid(error, t_eval, initial=0) 
+        ax.plot(
+            t_eval,
+            cumulative_error,
+            color=colors[i],
+            linewidth=2,
+            label=fr'$\zeta = {zeta}$'
+        )
+
+    ax.set_xlabel('Time', fontsize=14)
+    ax.set_ylabel(r'IAE$(t)$', fontsize=14)
+
+    # Legend on top, horizontal layout
+    ax.legend(
+        frameon=False,
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.25),
+        ncol=len(zeta_list),
+        fontsize=14,
+    )
+
+    # Fewer ticks
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
+
+    # Formatter: show 0 as "0", others with 3 decimal places
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda x, _: "0" if abs(x) < 1e-12 else f"{x:.3f}")
+    )
+
+    plt.tight_layout()
     plt.show()

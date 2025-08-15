@@ -138,12 +138,9 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None):
     H_ic_0 = H_dict['H_ic']
     start_time = time.time()
 
-    if "M_inv" not in H_dict:
-        M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
-        Minv = np.linalg.pinv(M)
-        H_dict["M_inv"] = Minv
-    else:
-        Minv = H_dict["M_inv"]
+    M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
+    Minv = np.linalg.pinv(M)
+    H_dict["M_inv"] = Minv
 
     # forcing function
     if t is not None:
