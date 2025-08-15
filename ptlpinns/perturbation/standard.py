@@ -9,6 +9,13 @@ from math import factorial
 from itertools import combinations_with_replacement
 import matplotlib as mpl
 
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["DejaVu Serif"],
+    "mathtext.fontset": "cm",
+    "text.usetex": False,
+})
+
 def number_combinations(index_list: List[int]) -> int:
     """
     From a list with indices, calculate the number of unique combinations

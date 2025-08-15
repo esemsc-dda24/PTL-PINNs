@@ -1,0 +1,38 @@
+experiment: "overderdamped_k3"
+N: 8000           
+t_max: 25.0
+seed: 42           
+k: 3   
+
+
+defaults: &defaults
+  w0: 1.0
+  zeta: 0.0
+  ic: [0.0, 0.0]  
+  forcing: { freq: [1], coef: random }
+  mu: [0, 0, 0, 0]
+
+
+heads:
+  - <<: *defaults      # head 1
+    ic: [2.0, 0.0]
+    zeta: 5
+  - <<: *defaults      # head 2
+    ic: [1.0, 0.0]
+    zeta: 10
+  - <<: *defaults      # head 3
+    ic: [3.0, 0.0]
+    zeta: 20
+
+train:
+    'method': equally-spaced-noisy
+    'lr': 1e-3
+    'num_iter': 10000
+    'step_size': 800
+    'gamma': 0.96
+    'w_ode': 1.5
+    'w_ic': 1
+    'hidden_layers': [128, 128, 256]
+    'use_sine': True
+    'use_fourier': False
+    'bias': True
