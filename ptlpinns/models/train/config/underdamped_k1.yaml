@@ -1,8 +1,8 @@
-experiment: "underdamped_k12"
+experiment: "underdamped_k1"
 N: 5120           
 t_max: 20.0
 seed: 42           
-k: 12            
+k: 1          
 
 defaults: &defaults
   w0: 1.0

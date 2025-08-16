@@ -1,8 +1,8 @@
-experiment: "undamped_k1"
+experiment: "undamped_k6"
 N: 5120           
 t_max: 20.0
 seed: 42           
-k: 1           
+k: 6           
 
 
 defaults: &defaults
@@ -15,6 +15,25 @@ defaults: &defaults
 heads:
   - <<: *defaults
     ic: [1.0, 0.0]
+
+  - <<: *defaults
+    ic: [0.5, 0.0]
+
+
+  - <<: *defaults
+    ic: [0.5, 0.0]
+    forcing: { freq: [3], coef: [-0.25] }
+
+
+  - <<: *defaults
+    forcing: { freq: [3, 12], coef: random }
+
+  - <<: *defaults
+    forcing: { freq: [2, 3, 4, 5, 6], coef: random }
+
+  - <<: *defaults
+    forcing: { freq: [6, 9, 18, 21], coef: random }
+
 
 train:
     'method': equally-spaced-noisy
