@@ -2,7 +2,7 @@ experiment: "overderdamped_k13"
 N: 8000           
 t_max: 25.0
 seed: 42           
-k: 14         
+k: 15         
 
 
 defaults: &defaults
