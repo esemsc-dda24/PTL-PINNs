@@ -76,6 +76,7 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
 
     NN_TL_solution = []
     TL_comp_time = []
+    perturbation_solution_list = []
     for i, (w_0_transfer, zeta_transfer, beta_transfer) in enumerate(zip(w_0_list, zeta_list, beta_list)):
         NN_TL_solution_w_0 = []
         for p in p_list if all_p else [p_list[i]]:
@@ -119,14 +120,20 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                     W, time = compute_TL_with_F(force_perturbation, w_ode=training_log['w_ode'], H_dict=H_dict_new)
                     perturbation_solution.append(compute_solution(H_dict_new['H'], W, H_dict_new['N']).T)
                     TL_time += time
+
+            perturbation_solution_list.append(perturbation_solution)
             NN_TL_solution_w_0.append(sum([(beta_transfer**k)*perturbation_solution[k] for k in range(p+1)]))
+
         NN_TL_solution.append(np.stack(NN_TL_solution_w_0, axis=0).squeeze())
         TL_comp_time.append(TL_time)
     NN_TL_solution = np.stack(NN_TL_solution, axis=1 if all_p else 0)
     if comp_time:
         return NN_TL_solution, H_dict_new, TL_comp_time
     else:
-        return NN_TL_solution, perturbation_solution, H_dict_new
+        if len(zeta_list) == 1:
+            return NN_TL_solution, perturbation_solution, H_dict_new
+        else:
+            return NN_TL_solution, perturbation_solution_list, H_dict_new
     
 
 def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None):
