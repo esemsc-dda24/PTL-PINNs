@@ -23,7 +23,7 @@ class FourierFeatures(nn.Module):
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)  # [N, 2F]
 
 class Multihead_model_fourier(nn.Module):
-    def __init__(self, k, hidden_act=[nn.ReLU(), nn.ReLU(), nn.ReLU()], use_sine=False, 
+    def __init__(self, k, hidden_act=[torch.sin, nn.Tanh(), nn.Tanh()], use_sine=False, 
                 use_fourier=False, omega_0 = 1, n_frequencies=16,
                 scale = 1.0, bias=False, HIDDEN_LAYERS=[128, 128, 256]):
         super().__init__()
