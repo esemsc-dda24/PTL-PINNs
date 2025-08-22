@@ -5,7 +5,7 @@
 **MSc in Applied Computational Science and Engineering — Imperial College London**  
 **Contact:** d.alexandrino2010@gmail.com
 
-> Master’s thesis project proposing fast, accurate framework to solve weakly nonlinear oscillators by combining perturbation theory with one-shot transfer learning in Multi-Headed PINNs.
+> Master’s thesis project proposing fast and accurate framework to solve weakly nonlinear oscillators by combining perturbation theory with one-shot transfer learning in Multi-Headed PINNs.
 
 ---
 
@@ -152,5 +152,3 @@ Here we summarise our finds by presenting the figures shown in the thesis.
 ### Computational time
 
 ![Computational time comparison](figures/table_computational_time.png)
-
-table_computational_time

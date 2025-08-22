@@ -100,7 +100,7 @@ def calculate_general_series(values: List, epsilon: float) -> List[np.ndarray]:
     return series
 
 def plot_IAE_and_subplots(PINN_x_solution_series, numerical_undamped_duffing,
-                           perturbation_solution, t_eval, selected_orders=[0, 1, 6]):
+                           perturbation_solution, t_eval, selected_orders=[0, 1, 6], ylim=(0, 25)):
 
     colors = cm.viridis(np.linspace(0, 1, len(selected_orders)))
     linestyles = ['--' if i == 0 else '-' for i in selected_orders]
@@ -137,7 +137,7 @@ def plot_IAE_and_subplots(PINN_x_solution_series, numerical_undamped_duffing,
         frameon=False
     )
 
-    plt.ylim(0, 25)
+    plt.ylim(ylim)
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space at the top
     plt.show()
 
