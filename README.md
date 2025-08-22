@@ -23,7 +23,7 @@ This repository contains the code used to develop the **PTL-PINN** — a **Pertu
 - **Foundational PINNs models**: Multi-Headed-PINNs trained for **undamped**, **underdamped**,and **overdamped** regimes with Fourier features and sinusoidal activations to mitigate spectral bias.
 - **Evaluation of the pratical applicability of perturbation methods**: exploring resonance/near-resonance, convergence of the frequency series, and practical truncation criteria.
 - **Evaluation of one-shot transfer learning**: disussion and results for the reuse of latent representations
-- **Performance vs. classical solvers (RK45, Radau)** demonstrating comparable accuracy and up to **500×** faster inference.
+- **Performance vs. classical solvers (RK45, Radau)** demonstrating comparable accuracy and up to one order of mangitude of faster inference.
 
 
 ---

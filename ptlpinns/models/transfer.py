@@ -72,7 +72,7 @@ def generate_eval_tensor(N=512, t_span=(0, 1), require_grad=True):
         t.requires_grad_()
     return t
 
-def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_list, forcing_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, solver="LPM", w_sol = [], power=3):
+def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_list, forcing_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, solver="LPM", w_sol = [], power=3, invert=True):
 
     NN_TL_solution = []
     TL_comp_time = []
@@ -90,7 +90,7 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
             for j in range(p+1):
                 if j==0:
                     W, TL_time, H_dict_new = compute_TL(w_0=w_0_transfer, zeta=zeta_transfer, forcing_function=forcing_list[i], ic=ic_list[i],
-                                                        w_ode=training_log['w_ode'], w_ic=training_log['w_ic'], H_dict=H_dict, t=t_eval)
+                                                        w_ode=training_log['w_ode'], w_ic=training_log['w_ic'], H_dict=H_dict, t=t_eval, invert=invert)
                     H_dict_new["R_ic"] = np.zeros_like(H_dict_new["R_ic"])
                     perturbation_solution.append(compute_solution(H_dict_new['H'], W, H_dict_new['N']).T)
                 else:
@@ -136,7 +136,7 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
             return NN_TL_solution, perturbation_solution_list, H_dict_new
     
 
-def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None):
+def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, invert=True):
     A = get_A(w_0=w_0, zeta=zeta)
     AH = compute_AH(A, H_dict['H'])
     H_star = H_dict["BHt"] + AH
@@ -148,6 +148,9 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None):
     M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
     Minv = np.linalg.pinv(M)
     H_dict["M_inv"] = Minv
+
+    if not invert:
+        start_time = time.time()
 
     # forcing function
     if t is not None:
