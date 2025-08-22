@@ -11,9 +11,9 @@
 
 ## 🔎 Overview
 
-Accurately solving nonlinear differential equations is central to modeling real-world dynamical systems. **Perturbation methods** approximate weakly nonlinear systems via a hierarchy of simpler linear problems, providing quantitative accuracy and qualitative insight.
+Accurately and efficiently solving nonlinear differential equations is crucial for modelling dynamic behavior across science and engineering. Physics-Informed Neural Networks (PINNs) have emerged as a powerful solution. However, these struggle to model nonlinear dynamics, suffering from limited generalization across problems and long training times. To address these limitations, we propose a perturbation-guided transfer learning framework for PINNs (PTL-PINN), which integrates perturbation theory with transfer learning to solve nonlinear oscillators efficiently.
 
-This repository contains the code used to develop the **PTL-PINN** — a **Perturbation-Guided Transfer Learning** framework for **Physics-Informed Neural Networks (PINNs)**. By training foundational PINN models on families of linear ODEs representative of the perturbation system and reusing a shared latent representation, PTL-PINN can reconstruct perturbation series efficiently with one-shot transfer learning.
+This repository contains the code used to develop the **PTL-PINN** — a **Perturbation-Guided Transfer Learning** framework for **Physics-Informed Neural Networks (PINNs)**. By training foundational PINN models on families of linear ODEs representative of the perturbation system and using one-shot transfer learning, PTL-PINN can compute solutions with the time complexity of matrix-vector multiplication.
 
 ---
 
@@ -22,8 +22,8 @@ This repository contains the code used to develop the **PTL-PINN** — a **Pertu
 - **Novel Lindstedt-Poincare implementation**: new numerical and scalable implementation of the Lindstedt-Poincare for undamped nonlinear oscillators with polynomial nonlinearity
 - **Foundational PINNs models**: Multi-Headed-PINNs trained for **undamped**, **underdamped**,and **overdamped** regimes with Fourier features and sinusoidal activations to mitigate spectral bias.
 - **Evaluation of the pratical applicability of perturbation methods**: exploring resonance/near-resonance, convergence of the frequency series, and practical truncation criteria.
-- **Evaluation of one-shot transfer learning**: proposing and demonstrating the reuse of precomputed matrix $M^{-1}$.
-- **Performance vs. classical solvers (RK45, Radau)** demonstrating comparable accuracy and up to **10×** faster inference.
+- **Evaluation of one-shot transfer learning**: disussion and results for the reuse of latent representations
+- **Performance vs. classical solvers (RK45, Radau)** demonstrating comparable accuracy and up to **500×** faster inference.
 
 
 ---
@@ -40,19 +40,18 @@ PTL-PINNs/
 │   │   ├── numerical.py        # numerical solver
 │   |   ├── forcing.py          # forcing functions      
 │   |   ├── equations.py        # ODE definition
-│   |   └── plot.py             # plotting 
 │   |
 │   ├── models/
 │   │   ├── __init__.py
 │   |   ├── model.py            # model architecture
 │   |   ├── training.py         # training functions
-│   |   ├── one_shot.py         # one-shot
-│   |   └── transfer.py         # transfer logic
+│   |   └── transfer.py         # one-shot transfer learning
 │   |   └── train/              # models training
 │   |      ├── config/
 │   |      |    ├── undamped.yml
 │   |      |    ├── underdamped.yml
-│   |      |    └── overdamped.yml
+│   |      |    ├── overdamped.yml
+│   |      |    └── ...
 │   |      |
 │   |      ├── undamped.ipynb
 │   |      ├── underdamped.ipynb
@@ -69,7 +68,8 @@ PTL-PINNs/
 │       ├── lpm_forcing.ipynb       # LPM forcing multiple passes
 │       ├── underdamped.ipynb       # underdamped results (and near-resonance)
 │       ├── overdamped.ipynb        # overdamped results (and ic blow-up)
-│       └── time.ipynb              #  timings: classic solvers vs. PTL-PINNs         
+│       ├── klein_gordon.ipynb      # klein-gordon travelling wave solution
+│       └── time.ipynb              # timings: classic solvers vs. PTL-PINNs         
 │
 ├── figures/                        # figures presented in the README.md
 ├── pyproject.toml          
@@ -104,3 +104,53 @@ We train a different model for the undamped, underdamped and overdamped regimes.
 ![Overdamped training](figures/overdamped_training.png)
 
 ---
+
+## Results
+
+Here we summarise our finds by presenting the figures shown in the thesis.
+
+### Limitations of perturbation methods
+
+- Standard perturbation method fails to solve undamped oscillator, due to resonance:
+
+![Proof Resonance](figures/proof_of_resonance.png)
+
+- The Lindstedt-Poincare method (LPM) is able to solve the undamped oscillator
+
+![Standard vs LPM](figures/standard_vs_LPM_undamped.png)
+
+- In the particular low damping and forced case, the underdamped solution diverges, due to near-resonance:
+
+![Proof of Near Resonance](figures/proof_of_near_resonance_underdamped.png)
+
+- Initial condition is a fundamental limitation of perturbation method but the uniform approach can improve convergence:
+
+![Overdamped for different ICs](figures/overdamped_different_ics.png)
+
+
+### Importance of pre-training
+
+- Models have difficulties generalizing to damped regimes for which they haven't been trained:
+
+![Models solving different overdamped oscillator](figures/pretty_overdamped_different_zeta.png)
+
+- Lindstedt-Poincare frequency convergence depends on the pretraining:
+
+![Series convergence Lindstedt-Poincare](figures/LPM_convergence_multiple.png)
+
+### Generalization of PTL-PINNs
+
+- PTL-PINNs can solve oscillator with nonlinearities up to any power:
+
+![Table multiple nonlinearity](figures/table_multiple_nonlineariety.png)
+
+- PTL-PINNs can be used for PDEs (ongoing work...). Here, through a variable change we solve the Klein-Gordon equation:
+
+![Klein Gordon equation solution](figures/Klein_Gordon_solution.png)
+
+
+### Computational time
+
+![Computational time comparison](figures/table_computational_time.png)
+
+table_computational_time
