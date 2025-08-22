@@ -236,6 +236,72 @@ def plot_comparison_standard_vs_lpm(t_eval, t_eval_lpm, perturbation_solution_st
     plt.show()
 
 
+def plot_compare_multiple_zeta(t_eval, zeta_list, numerical_undamped_duffing_list, NN_TL_solution):
+
+    title_fs  = 25
+    label_fs  = 25
+    tick_fs   = 18
+    legend_fs = 25
+
+    n = len(zeta_list)
+    cmap = cm.get_cmap("viridis", n)
+
+    # Two-row layout: top row = plots, bottom row = big legend
+    fig = plt.figure(figsize=(5*n, 6), constrained_layout=True)
+    gs = fig.add_gridspec(2, n, height_ratios=[14, 3])
+
+    axes = [fig.add_subplot(gs[0, i]) for i in range(n)]
+
+    for i, ax in enumerate(axes):
+        # Pick two contrasting colors from viridis for this subplot
+        base_color = cmap(i / (n-1 if n > 1 else 1))
+        rk_color   = base_color
+        pinn_color = cm.viridis(0.1 + 0.8*i/(n-1 if n > 1 else 1))  # slightly shifted
+
+        y_num = numerical_undamped_duffing_list[i][0, :]
+        y_nn  = NN_TL_solution[:, i, 0]
+
+        ax.plot(t_eval, y_num,
+                label="RK45 Solution",
+                color=rk_color, linewidth=2.5)
+
+        ax.plot(t_eval, y_nn,
+                label="PTL-PINN Solution",
+                color=pinn_color, linewidth=2.5,
+                linestyle="--", marker="o", markevery=250)
+
+        ax.set_title(f"ζ = {zeta_list[i]}", fontsize=title_fs, pad=15)
+        ax.set_xlabel("t", fontsize=label_fs, labelpad=8)
+        if i == 0:
+            ax.set_ylabel("x(t)", fontsize=label_fs, labelpad=10)
+
+        ax.tick_params(axis='both', labelsize=tick_fs)
+        ax.grid(alpha=0.3)
+
+        # independent y-limits per subplot (with padding)
+        y_min = min(np.min(y_num), np.min(y_nn))
+        y_max = max(np.max(y_num), np.max(y_nn))
+        pad = 0.05 * max(1e-12, (y_max - y_min))
+        ax.set_ylim(y_min - pad, y_max + pad)
+
+    # Legend-only axis
+    handles, labels = axes[0].get_legend_handles_labels()
+    leg_ax = fig.add_subplot(gs[1, :])
+    leg_ax.axis("off")
+    leg_ax.legend(
+        handles, labels,
+        loc="center",
+        ncol=min(4, len(labels)),
+        frameon=False,
+        fontsize=legend_fs,
+        handlelength=3.0,
+        markerscale=1.6,
+        columnspacing=2.5,
+        borderaxespad=1.0,
+    )
+
+    plt.show()
+
 
 def plot_IAE_multiple_zeta(zeta_list, t_eval, NN_TL_solution_list, numerical_undamped_duffing_list):
 
@@ -279,4 +345,48 @@ def plot_IAE_multiple_zeta(zeta_list, t_eval, NN_TL_solution_list, numerical_und
     )
 
     plt.tight_layout()
+    plt.show()
+
+def plot_error_by_order(t_eval, PINN_solution, numerical_list, p_list, param_list = [], param_name = ""):
+
+    for i in range(len(PINN_solution)):
+
+        for k in range(p_list[0]):
+
+            error = np.abs(numerical_list[i][0, :] - PINN_solution[i][k])
+            print(f"{param_name}: {param_list[i]}, order: {k}, mean error absolute: {np.mean(error)}")
+            cumulative_error = cumulative_trapezoid(error, t_eval, initial=0) 
+            plt.plot(t_eval, cumulative_error, label=f"{param_name}: {param_list[i]}, order: {k}")
+
+        plt.legend()
+        plt.show()
+
+
+def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
+
+    t_eval = t_eval / w_lpm
+
+    qsi_grid = np.linspace(t_eval[0], t_eval[-1], len(sol))
+    interp_fun = interp1d(qsi_grid, sol, kind='linear', bounds_error=False, fill_value=np.nan)
+
+    xmin, xmax = x_span
+    tmin, tmax = t_span
+
+    tmin = tmin
+    tmax = tmax
+
+    x = np.linspace(xmin, xmax, 1000)
+    t = np.linspace(tmin, tmax, 1000)
+
+    X, T = np.meshgrid(x, t)
+    QSI = X - c * T
+    D = interp_fun(QSI)
+
+    plt.figure(figsize=(8,6))
+    plt.pcolormesh(X, T, D, shading='auto', cmap='viridis')
+    cbar = plt.colorbar()
+    cbar.set_label(r'$u(\xi = x - ct)$', labelpad=8, fontsize=14)
+    plt.xlabel('x')
+    plt.ylabel('t')
+    plt.title(title, fontsize=14, pad = 10)
     plt.show()

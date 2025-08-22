@@ -2,7 +2,7 @@ experiment: "overdamped_k15"
 N: 8000           
 t_max: 25.0
 seed: 42           
-k: 15      
+k: 15         
 
 
 defaults: &defaults
@@ -15,19 +15,17 @@ defaults: &defaults
 
 heads:
   - <<: *defaults      # head 1
-    ic: [1.0, 0.0]
+    ic: [2.0, 0.0]
     zeta: 5
-
   - <<: *defaults      # head 2
     ic: [1.0, 0.0]
     zeta: 10
-
   - <<: *defaults      # head 3
-    ic: [2.0, 0.0]
+    ic: [1.0, 0.0]
     zeta: 20
 
   - <<: *defaults      # head 4
-    ic: [1.0, 0.0]
+    ic: [2.0, 0.0]
     zeta: 30
 
   - <<: *defaults     # head 5
@@ -40,7 +38,7 @@ heads:
 
   - <<: *defaults   # head 7
     zeta: 60
-    ic: [2.0, 0.0]
+    ic: [1.0, 0.0]
 
   - <<: *defaults   # head 8
     zeta: 5
@@ -48,12 +46,11 @@ heads:
 
   - <<: *defaults   # head 9
     zeta: 30
-    mu: [1, 0, 0, 1]
+    mu: [3, 0, 0, 3]
 
   - <<: *defaults   # head 10
-    zeta: 40
+    zeta: 60
     mu: [3, 0, 0, 3]
-    forcing: { freq: [0], coef: random }
 
   - <<: *defaults  # head 11
     ic: [1.5, 0.0]
@@ -64,25 +61,24 @@ heads:
     ic: [1.0, 0.0]
     zeta: 30
     mu: [3, 1, 2, 3]
-    forcing: { freq: [3], coef: random }
 
-  - <<: *defaults # head 13
+
+  - <<: *defaults   # head 13
+    ic: [1.0, 0.0]
+    zeta: 20
+    mu: [3, 1, 2, 3]
+
+  - <<: *defaults # head 14
     ic: [2.0, 0.0]
     zeta: 40
     mu: [3, 0, 0, 3]
     forcing: { freq: [3], coef: random }
 
-  - <<: *defaults  # head 14
-    zeta:  50
-    ic: [1.0, 0.0]
-    mu: [5, 0, 0, 5]
-    forcing: { freq: [5], coef: random }
-
   - <<: *defaults  # head 15
-    zeta:  60
+    zeta:  20
     ic: [1.0, 0.0]
     mu: [3, 0, 0, 3]
-    forcing: { freq: [8], coef: random }
+    forcing: { freq: [5], coef: random }
 
 train:
     'method': equally-spaced-noisy

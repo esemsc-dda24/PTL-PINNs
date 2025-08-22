@@ -5,6 +5,7 @@ import matplotlib as mpl
 from ptlpinns.perturbation import standard
 from ptlpinns.odes import equations, numerical
 from scipy.signal import find_peaks
+from scipy.interpolate import interp1d
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -142,7 +143,7 @@ def calculate_forcing(w_n: float, w_list: List, x:List[np.ndarray], x_ddot: List
 
     return w_n_term + B_term
 
-def calculate_w_series(values: List[float], epsilon: float, rwtol = 1e-6) -> List[np.ndarray]:
+def calculate_w_series(values: List[float], epsilon: float, rwtol = 1e-6, check_divergence = True) -> List[np.ndarray]:
     """
     For an array of values with `n` corrections (x or w or x') returns a List
     where index `n` is the series up to `n`
@@ -161,7 +162,7 @@ def calculate_w_series(values: List[float], epsilon: float, rwtol = 1e-6) -> Lis
         solution += (epsilon ** i) * values[i] 
         new_delta = np.abs(solution - solution_old)
 
-        if (new_delta > last_delta):
+        if (new_delta > last_delta and check_divergence):
             print(f"series has diverged for order p = {i}")
             break
 
@@ -202,8 +203,118 @@ def estimate_period_frequency(w_0, zeta, ic, q, epsilon, t_eval = np.linspace(0,
     return T_avg, omega
 
 def t_eval_lpm(t_eval, w_final):
+    """
+    Returns:
+        t_eval_lpm: t_eval scaled for LPM solution
+        t_eval_standard: t_eval clipped to the LPM solution range
+    """
     t_eval_lpm = t_eval / w_final
     mask = (t_eval >= 0) & (t_eval <= t_eval_lpm[-1])
     t_eval_standard = t_eval[mask]
 
     return t_eval_lpm, t_eval_standard
+
+def plot_multiple_phase_diagrams(
+    arr_list, labels=None,
+    xlab="position", ylab="velocity", title="Phase Diagram",
+    s=8, alpha=0.6, xlim=None, ylim=None,
+    lpm_index=None, omega=None, lpm_stride=30
+    ):
+    """
+    Expects arrays in this order: [LPM, Numerical, Standard].
+
+    Plot multiple phase diagrams on the same plot.
+    Omega scales LPM velocity to ensure correct scaling. 
+    """
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=140)
+
+    cmap = plt.cm.viridis
+    num_color = cmap(0.2)   # deep bluish
+    std_color = cmap(0.5)   # medium greenish
+    lpm_color = cmap(0.8)   # yellow-green
+
+    if labels is None:
+        labels = [f"Array {i+1}" for i in range(len(arr_list))]
+
+    handles_all, labels_all = [], []
+
+    order = [2, 1, 0]
+
+    for i in order:
+        arr = np.asarray(arr_list[i])
+        label = labels[i]
+
+        # Ensure shape (N, 2)
+        if arr.shape[0] == 2 and arr.shape[1] != 2:
+            arr = arr.T
+
+        # Apply frequency scaling to the LPM solution
+        if i == lpm_index and omega is not None:
+            arr = arr.copy()
+            arr[:, 1] *= omega
+
+        mask = np.all(np.isfinite(arr), axis=1)
+        x, y = arr[mask, 0], arr[mask, 1]
+
+        if i == 2:  # Standard (back)
+            h = ax.scatter(x, y, s=s, alpha=alpha, c=[std_color],
+                           marker='.', label=label, zorder=1)
+        elif i == 1:  # Numerical
+            h, = ax.plot(x, y, color=num_color, linewidth=1.4,
+                         label=label, zorder=2)
+        elif i == 0:  # LPM (front, sparse points)
+            idx = np.arange(0, len(x), max(1, lpm_stride))
+            h = ax.scatter(x[idx], y[idx], s=s*2, alpha=1.0, c=[lpm_color],
+                           marker='o', edgecolors='none', label=label, zorder=3)
+
+        handles_all.append(h)
+        labels_all.append(label)
+
+    ax.set_xlabel(xlab, fontsize=14)
+    ax.set_ylabel(ylab, fontsize=14)
+    ax.set_title(title)
+    ax.grid(True, linestyle=':', alpha=0.6)
+
+    if xlim:
+        ax.set_xlim(*xlim)
+    if ylim:
+        ax.set_ylim(*ylim)
+
+    fig.legend(handles_all, labels_all,
+               loc='upper center', ncol=3, frameon=False, fontsize=14)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+    plt.show()
+
+def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
+    """
+    Plots the solution of the Klein-Gordon equation in a 2D phase diagram
+    from a 1D ODE solution.
+    """
+
+    t_eval = t_eval / w_lpm
+
+    qsi_grid = np.linspace(t_eval[0], t_eval[-1], len(sol))
+    interp_fun = interp1d(qsi_grid, sol, kind='linear', bounds_error=False, fill_value=np.nan)
+
+    xmin, xmax = x_span
+    tmin, tmax = t_span
+
+    tmin = tmin
+    tmax = tmax
+
+    x = np.linspace(xmin, xmax, 1000)
+    t = np.linspace(tmin, tmax, 1000)
+
+    X, T = np.meshgrid(x, t)
+    QSI = X - c * T
+    D = interp_fun(QSI)
+
+    plt.figure(figsize=(8,6))
+    plt.pcolormesh(X, T, D, shading='auto', cmap='viridis')
+    cbar = plt.colorbar()
+    cbar.set_label(r'$u(\xi = x - ct)$', labelpad=8, fontsize=14)
+    plt.xlabel('x')
+    plt.ylabel('t')
+    plt.title(title, fontsize=14, pad = 10)
+    plt.show()
