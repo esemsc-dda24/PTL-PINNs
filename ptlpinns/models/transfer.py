@@ -95,14 +95,19 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                     perturbation_solution.append(compute_solution(H_dict_new['H'], W, H_dict_new['N']).T)
                 else:
                     if solver == "standard":
+
+                        forcing_time = time.perf_counter()
                         force_function_index = standard.force_func_perturbation(j)
                         force_perturbation = 0
                         for (a, b, c, coefficient) in force_function_index:
                             force_perturbation -= coefficient*perturbation_solution[a][:, 0]*perturbation_solution[b][:, 0]*perturbation_solution[c][:, 0]
                         force_perturbation = np.stack((np.zeros_like(force_perturbation), force_perturbation), axis=1)
+                        TL_time += time.perf_counter() - forcing_time
 
                     elif solver == "LPM":
                         if type(w_sol) == np.ndarray or type(w_sol) == list:
+
+                            forcing_time = time.perf_counter()
                             x_lin.append(perturbation_solution[-1][:, 0])
                             x_ddot.append(np.gradient(perturbation_solution[-1][:, 1], t_eval))
 
@@ -114,12 +119,15 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
 
                             x_n_forcing = LPM.calculate_forcing(w_n=w_n, w_list=w_sol[i], x=x_lin, x_ddot=x_ddot, power=power)
                             force_perturbation = np.stack((np.zeros_like(x_n_forcing), x_n_forcing), axis=1)
+                            TL_time += time.perf_counter() - forcing_time
                         else:
                             raise ValueError("w_sol should either be provided as a list or numpy array")
 
-                    W, time = compute_TL_with_F(force_perturbation, w_ode=training_log['w_ode'], H_dict=H_dict_new)
+                    compute_start = time.perf_counter()
+                    W = compute_TL_with_F(force_perturbation, w_ode=training_log['w_ode'], H_dict=H_dict_new)
                     perturbation_solution.append(compute_solution(H_dict_new['H'], W, H_dict_new['N']).T)
-                    TL_time += time
+                    compute_time = time.perf_counter() - compute_start
+                    TL_time += compute_time
 
             perturbation_solution_list.append(perturbation_solution)
             NN_TL_solution_w_0.append(sum([(beta_transfer**k)*perturbation_solution[k] for k in range(p+1)]))
@@ -143,14 +151,14 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     H_dict["H_star"] = H_star
     N = H_dict['N']
     H_ic_0 = H_dict['H_ic']
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
     Minv = np.linalg.pinv(M)
     H_dict["M_inv"] = Minv
 
     if not invert:
-        start_time = time.time()
+        start_time = time.perf_counter()
 
     # forcing function
     if t is not None:
@@ -167,13 +175,12 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     # compute W
     R = Rf + Ric
     W = Minv @ R  # shape (256, 1)
-    computational_time = time.time() - start_time
+    computational_time = time.perf_counter() - start_time
 
     return W, computational_time, H_dict
 
 
 def compute_TL_with_F(forcing_function, w_ode, H_dict, t=None):
-    start_time = time.time()
     # forcing function
     if t is not None:
         forcing_value = forcing_function(t).reshape(-1, 1)
@@ -184,9 +191,8 @@ def compute_TL_with_F(forcing_function, w_ode, H_dict, t=None):
     # compute W
     R = Rf + H_dict['R_ic']
     W = H_dict['M_inv'] @ R  # shape (256, 1)
-    computational_time = time.time() - start_time
 
-    return W, computational_time
+    return W
 
 def get_A(w_0, zeta=0):
     return np.array([[0, -1], [w_0 ** 2, 2 * zeta * w_0]])

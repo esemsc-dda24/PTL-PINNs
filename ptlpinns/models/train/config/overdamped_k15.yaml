@@ -89,6 +89,6 @@ train:
     'w_ode': 1.5
     'w_ic': 1
     'hidden_layers': [128, 128, 256]
-    'use_sine': True
+    'use_sine': False
     'use_fourier': False
     'bias': True
