@@ -326,3 +326,46 @@ def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
     plt.ylabel('t')
     plt.title(title, fontsize=14, pad = 10)
     plt.show()
+
+
+def plot_compare_1st_2nd_pass(numerical_1st_pass, numerical_2nd_pass, NN_TL_solution_LPM_1st_pass, NN_TL_solution_LPM_2nd_pass, t_eval_1st_pass, t_eval_2nd_pass):
+
+    cmap = mpl.cm.get_cmap('viridis')
+    color1 = cmap(0.2) 
+    color2 = cmap(0.8) 
+
+    plt.figure(figsize=(12, 4))
+
+    plt.plot(
+        t_eval_1st_pass, np.abs(numerical_1st_pass[0, :] - NN_TL_solution_LPM_1st_pass[:, 0]),
+        label=r'MAE (PINN): 1st-pass',
+        linewidth=2,
+        color=color1,
+        linestyle='-'
+    )
+
+    plt.plot(
+        t_eval_2nd_pass, np.abs(numerical_2nd_pass[0, :] - NN_TL_solution_LPM_2nd_pass[:, 0]),
+        label=r'MAE (PINN): 2nd-pass',
+        linewidth=2,
+        color=color2,
+    )
+
+    plt.xlabel('Time', fontsize=14)
+    plt.ylabel('MAE', fontsize=14)
+
+    # Legend: above plot, centered
+    plt.legend(
+        fontsize=16,
+        loc='lower center',
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=2,
+        frameon=False
+    )
+
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+
+    plt.tight_layout()
+    plt.show()

@@ -186,25 +186,6 @@ def sum_cosine_forcing(numpy: bool, w_0: List, coeff: List):
     return force
 
 
-def sum_cosine_transfer(numpy: bool, w_0: List, coeff: List):
-    """
-    Forcing for transfer should have dimensions switched when compared with training forcing
-    """
-
-    def force(t):
-        if numpy:
-            if np.isscalar(t):
-                return np.array([sum_cosine_1D(t, numpy, w_0, coeff), 0.0])  # shape: (2,)
-            else:
-                return np.stack((sum_cosine_1D(t, numpy, w_0, coeff), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
-        else:
-            if torch.is_tensor(t) and t.dim() == 0:
-                return torch.tensor([sum_cosine_1D(t, numpy, w_0, coeff), 0.0])
-            else:
-                return torch.stack((sum_cosine_1D(t, numpy, w_0, coeff), torch.zeros_like(t)), dim=1)
-
-    return force
-
 def underdamped_forcing(numpy: bool, w_0: List, coeff: List, mu: float, zeta: float):
     """
     Returns a 2D general underdamped forcing function for numpy or torch tensors
