@@ -7,13 +7,15 @@ from ptlpinns.perturbation import LPM, standard
 import time
 from typing import List
 
+DTYPE = torch.float64
+
 def compute_H_dict(model, N, bias, t_span):
 
-    model.to('cpu')
+    model.to('cpu', dtype=DTYPE)
     # define the interior set used to do transfer learning on cpu
-    t = generate_eval_tensor(N=N, t_span=t_span, require_grad=True)
+    t = generate_eval_tensor(N=N, t_span=t_span, require_grad=True).to(dtype=DTYPE)
     # define the boundary set used to do transfer learing on cpu
-    t_initial = generate_eval_tensor(N=1, t_span=(0, 0), require_grad=True)
+    t_initial = generate_eval_tensor(N=1, t_span=(0, 0), require_grad=True).to(dtype=DTYPE)
 
     # compute the hidden space H evaluated at the interior
     _, H = model(t)  # shape (IG0*IG1, 2W)
@@ -21,43 +23,44 @@ def compute_H_dict(model, N, bias, t_span):
     # compute the gradients of the hidden H in the interior data points
     Ht = compute_Ht(H, t)  # of shape (IG0*IG1, 2W)
     Ht_ic = compute_Ht(H_ic, t_initial)  # shape (Nic, 2W)
-    # detach the H
-    H = H.detach().numpy()  # shape (N, 2W)
-    H_ic = H_ic.detach().numpy()  # shape (1, 2W)
+
     H = H.reshape(2 * H.shape[0], -1)  # transform all H into shape (2N, W)
     H_ic = H_ic.reshape(2 * H_ic.shape[0], -1)  # shape (2, W)
+
     # reshape differentiation of H
     Ht = Ht.reshape(2 * Ht.shape[0], -1)  # shape (2N, W)
     Ht_ic = Ht_ic.reshape(2 * Ht_ic.shape[0], -1)  # shape (2, W)
 
-    # now add another dimension to the H and Hx Ht if needed
-    # all zeros for Hx and Ht and all ones for H
     if bias:
-        H = np.hstack((H, np.ones((H.shape[0], 1))))
-        H_ic = np.hstack((H_ic, np.ones((H_ic.shape[0], 1))))
-        Ht = np.hstack((Ht, np.zeros((Ht.shape[0], 1))))
-        Ht_ic = np.hstack((Ht_ic, np.zeros((Ht_ic.shape[0], 1))))
+        H      = torch.cat([H,      torch.ones((H.size(0), 1),   dtype=DTYPE)], dim=1)
+        H_ic   = torch.cat([H_ic,   torch.ones((H_ic.size(0),1), dtype=DTYPE)], dim=1)
+        Ht     = torch.cat([Ht,     torch.zeros((Ht.size(0), 1),  dtype=DTYPE)], dim=1)
+        Ht_ic  = torch.cat([Ht_ic,  torch.zeros((Ht_ic.size(0),1),dtype=DTYPE)], dim=1)
 
-    # define the matrices A
-    B = np.array([[1, 0], [0, 1]])
+    B = torch.eye(2, dtype=DTYPE)
     BHt = compute_AH(B, Ht)  # shape (2N, W)
     H_dict = {'H': H, 'H_ic': H_ic, 'Ht': Ht, 'Ht_ic': Ht_ic, 'N': N,
               'BHt': BHt}
     return H_dict
 
 def compute_Ht(H, t):
+    
     output = []
     for i in range(H.shape[1]):
-        output.append(diff(H[:, i].reshape(-1, 1), t).detach().numpy())
-    return np.concatenate(output, axis=1)
+        output.append(diff(H[:, i].reshape(-1, 1), t))
+
+    return torch.cat(output, dim=1)
+
 
 def compute_AH(A, H):
     N, W_size = H.shape
-    A_reshaped = A.reshape(1, 2, 2)
+    A_reshaped = A.unsqueeze(0) 
     # Reshape H to (3600, 2, 256) to match the dimensions of A
     H_reshaped = H.reshape(-1, 2, W_size)
     # Perform the multiplication
-    AH = np.matmul(A_reshaped, H_reshaped)
+    print("A dtype:", A_reshaped.dtype)
+    print("H dtype:", H_reshaped.dtype)
+    AH = torch.matmul(A_reshaped, H_reshaped)
     # Reshape the result back
     AH = AH.reshape(-1, W_size)
     return AH
@@ -91,7 +94,7 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                 if j==0:
                     W, TL_time, H_dict_new = compute_TL(w_0=w_0_transfer, zeta=zeta_transfer, forcing_function=forcing_list[i], ic=ic_list[i],
                                                         w_ode=training_log['w_ode'], w_ic=training_log['w_ic'], H_dict=H_dict, t=t_eval, invert=invert)
-                    H_dict_new["R_ic"] = np.zeros_like(H_dict_new["R_ic"])
+                    H_dict_new["R_ic"] = torch.zeros_like(H_dict_new["R_ic"], dtype=DTYPE)
                     perturbation_solution.append(compute_solution(H_dict_new['H'], W, H_dict_new['N']).T)
                 else:
                     if solver == "standard":
@@ -101,15 +104,24 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                         force_perturbation = 0
                         for (a, b, c, coefficient) in force_function_index:
                             force_perturbation -= coefficient*perturbation_solution[a][:, 0]*perturbation_solution[b][:, 0]*perturbation_solution[c][:, 0]
-                        force_perturbation = np.stack((np.zeros_like(force_perturbation), force_perturbation), axis=1)
+                        force_perturbation = torch.stack((torch.zeros_like(force_perturbation), force_perturbation), dim=1)
                         TL_time += time.perf_counter() - forcing_time
 
                     elif solver == "LPM":
                         if type(w_sol) == np.ndarray or type(w_sol) == list:
 
                             forcing_time = time.perf_counter()
-                            x_lin.append(perturbation_solution[-1][:, 0])
-                            x_ddot.append(np.gradient(perturbation_solution[-1][:, 1], t_eval))
+                            x_lin.append(perturbation_solution[-1][:, 0].detach())
+
+                            second_deriv = torch.autograd.grad(
+                                outputs=perturbation_solution[-1][:, 1],
+                                inputs=t_eval,
+                                grad_outputs=torch.ones_like(perturbation_solution[-1][:, 1]),
+                                create_graph=False,
+                                retain_graph=False
+                            )[0]
+
+                            x_ddot.append(second_deriv.detach())
 
                             if len(w_sol[i]) <= j:
                                 w_n = LPM.calc_w_n(w_list=w_sol[i], x=x_lin, x_ddot=x_ddot, t=t_eval, power=power)
@@ -118,7 +130,7 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                                 w_n = w_sol[i][j]
 
                             x_n_forcing = LPM.calculate_forcing(w_n=w_n, w_list=w_sol[i], x=x_lin, x_ddot=x_ddot, power=power)
-                            force_perturbation = np.stack((np.zeros_like(x_n_forcing), x_n_forcing), axis=1)
+                            force_perturbation = torch.stack((torch.zeros_like(x_n_forcing), x_n_forcing), dim=1)
                             TL_time += time.perf_counter() - forcing_time
                         else:
                             raise ValueError("w_sol should either be provided as a list or numpy array")
@@ -132,9 +144,9 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
             perturbation_solution_list.append(perturbation_solution)
             NN_TL_solution_w_0.append(sum([(beta_transfer**k)*perturbation_solution[k] for k in range(p+1)]))
 
-        NN_TL_solution.append(np.stack(NN_TL_solution_w_0, axis=0).squeeze())
+        NN_TL_solution.append(torch.stack(NN_TL_solution_w_0, axis=0).squeeze())
         TL_comp_time.append(TL_time)
-    NN_TL_solution = np.stack(NN_TL_solution, axis=1 if all_p else 0)
+    NN_TL_solution = torch.stack(NN_TL_solution, axis=1 if all_p else 0)
     if comp_time:
         return NN_TL_solution, H_dict_new, TL_comp_time
     else:
@@ -153,9 +165,12 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     H_ic_0 = H_dict['H_ic']
     start_time = time.perf_counter()
 
+    w_ode = torch.as_tensor(w_ode, dtype=DTYPE)
+    w_ic  = torch.as_tensor(w_ic,  dtype=DTYPE)
+
     M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
-    print(np.linalg.cond(M))
-    Minv = np.linalg.pinv(M)
+    return M
+    Minv = torch.linalg.pinv(M)
     H_dict["M_inv"] = Minv
 
     if not invert:
@@ -164,17 +179,23 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     # forcing function
     if t is not None:
         forcing_value = forcing_function(t).reshape(-1, 1)
+        print("forcing_value dtype:", forcing_value.dtype)
+        print("H_star dtype:", H_star.dtype)
         Rf = w_ode * (H_star.T @ forcing_value) / N
     else:
         Rf = w_ode * (H_star.T @ forcing_function) / N
     H_dict["Rf"] = Rf
 
     # initial condition
-    Ric = w_ic * ((ic * H_ic_0.T).sum(axis=1)).reshape(-1, 1)
-    H_dict["R_ic"] = Ric
+    Ric = w_ic * ((ic * H_ic_0.T).sum(dim=1)).reshape(-1, 1)
+    H_dict["R_ic"] = Ric.to(dtype=DTYPE)
 
     # compute W
     R = Rf + Ric
+    print("Rf dtype:", Rf.dtype)
+    print("Ric dtype:", Ric.dtype)
+    print("R dtype:", R.dtype)
+    print("Minv dtype:", Minv.dtype)
     W = Minv @ R  # shape (256, 1)
     computational_time = time.perf_counter() - start_time
 
@@ -195,8 +216,10 @@ def compute_TL_with_F(forcing_function, w_ode, H_dict, t=None):
 
     return W
 
-def get_A(w_0, zeta=0):
-    return np.array([[0, -1], [w_0 ** 2, 2 * zeta * w_0]])
+def get_A(w_0, zeta=0.0):
+
+    return torch.tensor([[0.0, -1.0], [w_0 ** 2, 2 * zeta * w_0]],
+                         dtype=DTYPE, requires_grad=True)
 
 def compute_solution(H, W, N):
     return (H @ W).reshape(N, -1).T

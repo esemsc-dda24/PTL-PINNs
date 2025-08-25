@@ -6,6 +6,7 @@ from ptlpinns.perturbation import standard
 from ptlpinns.odes import equations, numerical
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
+import torch
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -65,7 +66,7 @@ def w_absolute_error(w_series: List[np.ndarray], w_teor: float) -> np.ndarray:
     plt.tight_layout()
     plt.show()
 
-def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
+def epsilon_x_power(N: int, x: List, power: int):
     """
     Calculates the order-N contribution of ε * (x ** q)
 
@@ -77,8 +78,11 @@ def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
     Returns:
         np.ndarray: ε * x^power term at order N
     """
+
+    lib = np if type(x[0]) == np.ndarray else torch
+
     index_list = standard.index_tuples(N, power)
-    result = np.zeros_like(x[0])
+    result = lib.zeros_like(x[0])
     for indices in index_list:
         term = standard.number_combinations(indices)
         for i in indices:
@@ -86,14 +90,16 @@ def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
         result += term
     return result
 
-def calc_A(N: int, x_ddot: List[np.ndarray], w_list: List)-> List[np.ndarray]:
+def calc_A(N: int, x_ddot: List, w_list: List)-> List:
     """
     Calculates A(x_{0}, ..., x_{N-1}, w_{0}, ..., w_{N - 1})
 
     Returns
         np.ndarray: Numpy array with A's values
     """
-    A_term = np.zeros_like(x_ddot[0])
+
+    lib = np if type(x_ddot[0]) == np.ndarray else torch
+    A_term = lib.zeros_like(x_ddot[0])
     for k in range(1, N + 1): # ddot_x_N can't be calculated
         x_ddot_nk = x_ddot[N - k]
         for i in range(k + 1):
@@ -103,12 +109,12 @@ def calc_A(N: int, x_ddot: List[np.ndarray], w_list: List)-> List[np.ndarray]:
 
     return A_term
 
-def calc_B(N: int, x_ddot: List[np.ndarray], x: List[np.ndarray], w_list: List, power: int = 3):
+def calc_B(N: int, x_ddot: List, x: List, w_list: List, power: int = 3):
     epsilon_cubed_term = - epsilon_x_power(N, x, power)
     A_term = - calc_A(N, x_ddot, w_list)
     return A_term + epsilon_cubed_term
 
-def calc_w_n(w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], t: np.ndarray, power = 3) -> int:
+def calc_w_n(w_list: List, x:List, x_ddot: List, t, power = 3) -> int:
     """
     Calcultes the frequency correction for order n using quantities of order n - 1
 
@@ -116,7 +122,9 @@ def calc_w_n(w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], t: np.n
         int: Frequency correction for order n
     """
 
-    mask    = (t >= 0) & (t <= 2*np.pi)
+    lib = np if type(x[0]) == np.ndarray else torch
+
+    mask    = (t >= 0) & (t <= 2*lib.pi)
     t_seg   = t[mask]    
 
     x_seg = [term[mask] for term in x]
@@ -126,14 +134,14 @@ def calc_w_n(w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], t: np.n
     B = calc_B(N=len(x_ddot), x_ddot = x_ddot_seg, x = x_seg, w_list=w_list, power=power)
     K = 2 * x_ddot_seg[0] / w_list[0]
 
-    num = np.trapezoid(B * (np.cos(t_seg)), x=t_seg)
-    den = np.trapezoid(K * (np.cos(t_seg)), x=t_seg)
+    num = lib.trapezoid(B * (lib.cos(t_seg)), x=t_seg)
+    den = lib.trapezoid(K * (lib.cos(t_seg)), x=t_seg)
 
     w_n = num / den
 
     return w_n
 
-def calculate_forcing(w_n: float, w_list: List, x:List[np.ndarray], x_ddot: List[np.ndarray], power = 3) -> np.ndarray:
+def calculate_forcing(w_n: float, w_list: List, x:List, x_ddot: List, power = 3) -> np.ndarray:
     """"
     Calculates forcing for order n differential equation. Depends only on x and w from order 0 to n - 1.
     """

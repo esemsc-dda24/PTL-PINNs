@@ -3,7 +3,6 @@ import torch.nn as nn
 import numpy as np
 import json
 
-
 class SineLayer(nn.Module):
     def __init__(self, in_features, out_features, omega_0=1):
         super().__init__()

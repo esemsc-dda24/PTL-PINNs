@@ -78,6 +78,21 @@ PTL-PINNs/
 
 ---
 
+## How to run
+
+After clonning the repository, install the ptlpinn package. 
+
+```bash
+conda create -n <your_venv> python=3.11
+conda activate <your_venv>
+cd ptlpinns/
+pip install -e .
+```
+
+Now you are set to explore the examples provided in ```ptlpinns/results/```.
+
+---
+
 ## Multi-Headed-PINN architecture
  
 Multi-Headed-PINN uses a shared latent representation to approximate equations of

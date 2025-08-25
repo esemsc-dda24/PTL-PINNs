@@ -8,6 +8,7 @@ from collections import Counter
 from math import factorial
 from itertools import combinations_with_replacement
 import matplotlib as mpl
+import torch
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -109,7 +110,13 @@ def plot_IAE_and_subplots(PINN_x_solution_series, numerical_undamped_duffing,
 
     lines = []
     for idx, i in enumerate(selected_orders):
-        error = abs(PINN_x_solution_series[i] - numerical_undamped_duffing[0])
+
+        PINN_solution_order_i = PINN_x_solution_series[i]
+
+        if type(PINN_solution_order_i) == torch.Tensor:
+            PINN_solution_order_i = PINN_solution_order_i.detach().cpu().numpy()
+
+        error = abs(PINN_solution_order_i - numerical_undamped_duffing[0])
         iae = cumulative_trapezoid(error, t_eval, initial=0)
         line, = ax1.plot(
             t_eval,
@@ -146,7 +153,12 @@ def plot_IAE_and_subplots(PINN_x_solution_series, numerical_undamped_duffing,
     fig2, axes = plt.subplots(1, 3, figsize=(16, 3.5), sharey=False, constrained_layout=True)
 
     for i, order in enumerate(selected_orders):
-        axes[i].plot(t_eval, perturbation_solution[order][:, 0], linewidth=2)
+
+        perturbation_order_i = perturbation_solution[order][:, 0]
+        if type(perturbation_solution[order]) == torch.Tensor:
+            perturbation_order_i = perturbation_order_i.detach().cpu().numpy()
+
+        axes[i].plot(t_eval, perturbation_order_i, linewidth=2)
         axes[i].set_title(titles[i], fontsize=20)
         axes[i].tick_params(axis='both', labelsize=14)
         axes[i].set_xlabel("Time", fontsize=14)

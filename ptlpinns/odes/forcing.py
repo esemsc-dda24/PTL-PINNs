@@ -160,9 +160,9 @@ def zeroes_2D(numpy: bool):
                 return np.stack((np.zeros_like(t), np.zeros_like(t)), axis=1)  # shape: (len(t), 2)
         else:
             if torch.is_tensor(t) and t.dim() == 0:
-                return torch.tensor([0.0, 0.0])
+                return torch.tensor([0.0, 0.0], dtype=t.dtype)
             else:
-                return torch.stack((torch.zeros_like(t), torch.zeros_like(t)), dim=1)
+                return torch.stack((torch.zeros_like(t, dtype=t.dtype), torch.zeros_like(t, dtype=t.dtype)), dim=1)
 
     return force
 
