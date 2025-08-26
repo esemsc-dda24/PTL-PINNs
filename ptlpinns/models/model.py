@@ -13,6 +13,9 @@ class SineLayer(nn.Module):
         return torch.sin(self.omega_0 * self.linear(x))
     
 class FourierFeatures(nn.Module):
+    """
+    Input Layer with Fourier Feature embeddings.
+    """
     def __init__(self, n_frequencies, scale=1.0):
         super().__init__()
         self.B = nn.Parameter(scale * torch.randn(n_frequencies, 1), requires_grad=False)  # [F, 1]
@@ -74,6 +77,10 @@ class Multihead_model_fourier(nn.Module):
 
 
 def load_model(path, name):
+    """
+    Load a trained model from a specified path and filename.
+    Assumes there model log is stored in 'training_log.json' in the same directory.
+    """
 
     with open(f'{path}/training_log.json', 'r') as f:
         training_log = json.load(f)

@@ -1,0 +1,52 @@
+experiment: "undamped_knonlinear"
+N: 5120           
+t_max: 20.0
+seed: 42           
+k: 7
+epsilon_list: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]      
+
+
+defaults: &defaults
+  w0: 1.0
+  zeta: 0.0
+  ic: [0.0, 0.0]  
+  forcing: { freq: [], coef: [] }
+  mu: 0.0
+
+heads:
+  - <<: *defaults
+    ic: [0.2, 0.0]
+
+  - <<: *defaults
+    ic: [0.5, 0.0]
+
+  - <<: *defaults
+    ic: [1, 0.0]
+
+  - <<: *defaults
+    ic: [0.2, 0.0]
+
+  - <<: *defaults
+    ic: [0.2, 0.0]
+
+  - <<: *defaults
+    ic: [0.5, 0.0]
+
+  - <<: *defaults
+    ic: [1, 0.0]
+
+
+train:
+    'method': equally-spaced-noisy
+    'lr': 1e-3
+    'num_iter': 15000
+    'step_size': 600
+    'gamma': 0.96
+    'w_ode': 1.5
+    'w_ic': 1
+    'hidden_layers': [256, 256, 512]
+    'use_sine': True
+    'use_fourier': True
+    'n_frequencies': 16
+    'scale': 1.0
+    'bias': True
