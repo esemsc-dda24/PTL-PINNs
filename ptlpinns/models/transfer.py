@@ -243,7 +243,7 @@ def compute_transfer_learning(transfer_model, optimizer, num_iter, equation_func
 
               MAE = evaluate_MAE(transfer_model, numerical_solution, t_span, N)
 
-              if MAE < 1.5e-2:
+              if MAE < 2.5e-2:
                      print(f"Converged at iteration {it}: MAE = {MAE} | time {total_time}")
                      break
 
