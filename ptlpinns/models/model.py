@@ -103,3 +103,34 @@ def load_model(path, name):
     pinn.load_state_dict(torch.load(f'{path}/{name}'))
 
     return pinn, training_log
+
+
+def transfer_model(training_log, base_model):
+
+    bias = training_log['bias']
+    use_sine = training_log['use_sine']
+    use_fourier = training_log['use_fourier']
+    scale = training_log['scale']
+    n_frequencies = training_log['n_frequencies']
+    hidden_layers = training_log['hidden_layers']
+
+    if use_fourier:
+        transfer_model = Multihead_model_fourier(k=1, bias=bias, use_sine=use_sine,
+                                                use_fourier=use_fourier, scale=scale,
+                                                n_frequencies=n_frequencies, HIDDEN_LAYERS=hidden_layers)
+    else:
+        transfer_model = Multihead_model_fourier(k=1, bias=bias, HIDDEN_LAYERS=hidden_layers)
+
+    # Extract all layers except the final layers
+    backbone = {k: v for k, v in base_model.state_dict().items() if not k.startswith("final_layers")}
+    transfer_model.load_state_dict(backbone, strict=False)
+
+    # freeze all layers except the final layers
+    for name, param in transfer_model.named_parameters():
+        if not name.startswith("final_layers"):
+            param.requires_grad = False
+    
+    return transfer_model
+
+def head_parameters(model, head_prefix="final_layers"):
+    return [p for n, p in model.named_parameters() if n.startswith(head_prefix) and p.requires_grad]
