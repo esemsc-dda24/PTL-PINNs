@@ -40,11 +40,11 @@ heads:
     zeta: 0.6
 
   - <<: *defaults
-    zeta: 0.7
+    zeta: 0.1
     ic: [0.5, 0.0]
 
   - <<: *defaults
-    zeta: 0.8
+    zeta: 0.2
     ic: [1.0, 0.0]
 
   - <<: *defaults
