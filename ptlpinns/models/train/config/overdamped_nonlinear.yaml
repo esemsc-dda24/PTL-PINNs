@@ -1,0 +1,74 @@
+experiment: "overderdamped_nonlinear"
+N: 5120           
+t_max: 20.0
+seed: 42           
+k: 11  
+epsilon_list: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5] 
+
+
+defaults: &defaults
+  w0: 1.0
+  zeta: 0.0
+  ic: [0.0, 0.0]  
+  forcing: { freq: [0], coef: random }
+  mu: [0, 0, 0, 0]
+
+
+heads:
+  - <<: *defaults      # head 1
+    ic: [0.5, 0.0]
+    zeta: 5
+
+  - <<: *defaults      # head 2
+    ic: [1.0, 0.0]
+    zeta: 10
+
+  - <<: *defaults      # head 3
+    ic: [1.5, 0.0]
+    zeta: 20
+
+  - <<: *defaults      # head 4
+    ic: [0.5, 0.0]
+    zeta: 30
+
+  - <<: *defaults     # head 5
+    ic: [1.0, 0.0]
+    zeta: 40
+
+  - <<: *defaults   # head 6
+    ic: [1.5, 0.0]
+    zeta: 50
+
+  - <<: *defaults   # head 7
+    zeta: 60
+    ic: [0.5, 0.0]
+
+  - <<: *defaults   # head 8
+    zeta: 5
+    ic: [1.0, 0.0]
+
+  - <<: *defaults   # head 9
+    zeta: 10
+    ic: [1.5, 0.0]
+
+  - <<: *defaults   # head 10
+    zeta: 30
+    ic: [0.5, 0.0]
+
+  - <<: *defaults  # head 11
+    ic: [1.0, 0.0]
+    zeta: 40
+
+
+train:
+    'method': equally-spaced-noisy
+    'lr': 1e-3
+    'num_iter': 20000
+    'step_size': 800
+    'gamma': 0.96
+    'w_ode': 1.5
+    'w_ic': 1
+    'hidden_layers': [128, 128, 256]
+    'use_sine': False
+    'use_fourier': False
+    'bias': True

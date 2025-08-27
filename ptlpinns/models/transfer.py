@@ -4,6 +4,7 @@ from neurodiffeq.generators import Generator1D
 import numpy as np
 from matplotlib import pyplot as plt
 from ptlpinns.perturbation import LPM, standard
+from ptlpinns.models import training
 import time
 from typing import List
 
@@ -197,3 +198,54 @@ def get_A(w_0, zeta=0):
 
 def compute_solution(H, W, N):
     return (H @ W).reshape(N, -1).T
+
+
+def evaluate_MAE(transfer_model, numerical_solution, t_span, N):
+    """
+    Evaluate the Mean Absolute Error (MAE) between the model's prediction and the numerical solution.
+    Stopping condition for transfer learning.
+    """
+
+    t_eval_torch = training.generate_eval_tensor(N, t_span, False)
+    model_result = transfer_model(t_eval_torch)[0].squeeze()[:, 0].detach().numpy()
+    return np.mean(np.abs(model_result - numerical_solution[0, :]))
+
+
+def compute_transfer_learning(transfer_model, optimizer, num_iter, equation_functions, 
+                            initial_condition_functions, forcing_functions,
+                            numerical_solution, N=512, t_span=(0, 1),
+                            every=100, ode_weight=1, ic_weight=1,
+                            method='equally-spaced-noisy', scheduler=None):
+       """
+       Regular Multi-Headed-PINN transfer learning.
+       """
+
+       total_time = 0.0
+
+       for it in range(1, num_iter):
+
+              start_time = time.perf_counter()
+              optimizer.zero_grad()
+              total, ode, ic, _ = training.loss(
+              model=transfer_model, N=N, t_span=t_span,
+              equation_functions=equation_functions,
+              initial_condition_functions=initial_condition_functions,
+              forcing_functions=forcing_functions,
+              ode_weight=ode_weight, ic_weight=ic_weight, method=method)
+              total.backward()
+              optimizer.step()
+
+              if scheduler is not None:
+                     scheduler.step()
+
+              end_time = time.perf_counter()
+              total_time += end_time - start_time
+
+              MAE = evaluate_MAE(transfer_model, numerical_solution, t_span, N)
+
+              if MAE < 1e-2:
+                     print(f"Converged at iteration {it}: MAE = {MAE} | time {total_time}")
+                     break
+
+              if it % every == 0:
+                     print(f"[iteration] {it} | total {total.item():.3e} | ode {ode.item():.3e} | ic {ic.item():.3e} | MAE {MAE:.3e} | time {total_time:.2f}")
