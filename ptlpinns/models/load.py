@@ -4,11 +4,17 @@ from typing import Dict, List, Any
 import torch
 
 def initial_condition(y1_0, y2_0):
+    """
+    Create an initial condition function for a system of ODEs.
+    """
     def ic(t):
         return torch.stack((y1_0 * torch.ones_like(t), y2_0 * torch.ones_like(t)), dim=1)
     return ic
 
 def _as_list(x):
+    """
+    Ensure the input is a list. If None, return an empty list.
+    """
     if x is None:
         return []
     if isinstance(x, (list, tuple)):

@@ -106,6 +106,9 @@ def load_model(path, name):
 
 
 def transfer_model(training_log, base_model):
+    """
+    Create a transfer learning model based on a pre-trained base model.
+    """
 
     bias = training_log['bias']
     use_sine = training_log['use_sine']
