@@ -374,6 +374,15 @@ def plot_error_by_order(t_eval, PINN_solution, numerical_list, p_list, param_lis
         plt.show()
 
 
+def calculate_forcing(j, power, perturbation_solution):
+
+    result = np.zeros_like(perturbation_solution[-1][:, 0])
+    for nonlinearity in power:
+        result += nonlinearity[1] * epsilon_x_power(j, perturbation_solution[-1][:, 0], nonlinearity[0])
+
+    return result
+      
+
 def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
 
     t_eval = t_eval / w_lpm

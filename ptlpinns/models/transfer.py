@@ -98,11 +98,9 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
                     if solver == "standard":
 
                         forcing_time = time.perf_counter()
-                        force_function_index = standard.force_func_perturbation(j)
-                        force_perturbation = 0
-                        for (a, b, c, coefficient) in force_function_index:
-                            force_perturbation -= coefficient*perturbation_solution[a][:, 0]*perturbation_solution[b][:, 0]*perturbation_solution[c][:, 0]
+                        force_perturbation = standard.calculate_forcing(j, power, perturbation_solution)
                         force_perturbation = np.stack((np.zeros_like(force_perturbation), force_perturbation), axis=1)
+
                         TL_time += time.perf_counter() - forcing_time
 
                     elif solver == "LPM":
