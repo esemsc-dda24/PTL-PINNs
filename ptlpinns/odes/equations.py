@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-def ode_oscillator_1D(w_0, zeta, forcing_1D, q, epsilon):
+def ode_oscillator_1D(w_0, zeta, forcing_1D, epsilon, q = [(3, 1)]):
 
     def ode(t, y):
 
