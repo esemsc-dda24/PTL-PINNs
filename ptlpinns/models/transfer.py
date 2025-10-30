@@ -73,7 +73,7 @@ def generate_eval_tensor(N=512, t_span=(0, 1), require_grad=True):
         t.requires_grad_()
     return t
 
-def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_list, forcing_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, solver="LPM", w_sol = [], power=3, invert=True):
+def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_list, forcing_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, solver="LPM", w_sol = [], power=(3, 1), invert=True):
 
     NN_TL_solution = []
     TL_comp_time = []
