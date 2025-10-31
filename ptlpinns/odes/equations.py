@@ -35,3 +35,20 @@ def equation_oscillator(w_0=1.0, epsilon=0.0, zeta=0):
     def equation(y1, y2):
         return torch.stack((-y2, (w_0 ** 2) * y1 + epsilon * (y1 ** 3) + (2*w_0*zeta) * y2), dim = 1)
     return equation
+
+
+def lv_normalized(alpha):
+    """
+    Normalized version of the Lotka-Volterra equation.
+
+    Returns:
+        function
+    """
+
+    def lv(t, z):
+        x, y = z
+        dx = x * (1 - y)
+        dy = alpha * y * (x - 1)
+        return [dx, dy]
+
+    return lv
