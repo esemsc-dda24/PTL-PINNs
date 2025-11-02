@@ -255,9 +255,11 @@ def compute_transfer_learning(transfer_model, optimizer, num_iter, equation_func
               if it % every == 0:
                      print(f"[iteration] {it} | total {total.item():.3e} | ode {ode.item():.3e} | ic {ic.item():.3e} | MAE {MAE:.3e} | time {total_time:.2f}")
 
+def get_A_LKV(alpha):
+    return np.array([[0, 1/np.sqrt(alpha)], [-np.sqrt(alpha), 0]])
 
 def compute_TL_LKV(alpha, ic, w_ode, w_ic, H_dict, invert=True):
-    A = get_A(w_0=np.sqrt(alpha), zeta=0)
+    A = get_A_LKV(alpha)
     AH = compute_AH(A, H_dict['H'])
     H_star = H_dict["BHt"] + AH
     H_dict["H_star"] = H_star
@@ -304,10 +306,12 @@ def compute_perturbation_solution_LKV(beta_list, p_list, ic_list, alpha_list, H_
 
                     W, TL_time = compute_TL_LKV(alpha = alpha_transfer, ic=ic_list[i], 
                                                 w_ode=training_log['w_ode'], w_ic=training_log['w_ic'],
-                                                  H_dict=H_dict, invert=invert)
+                                                H_dict=H_dict, invert=invert)
                     
                     H_dict["R_ic"] = np.zeros_like(H_dict["R_ic"])
                     perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+                    plt.plot(t_eval, perturbation_solution[0][:, 0])
+                    plt.plot(t_eval, perturbation_solution[0][:, 1])
                 else:
 
                     if type(w_sol) == np.ndarray or type(w_sol) == list:
