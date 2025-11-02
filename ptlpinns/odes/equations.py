@@ -52,3 +52,13 @@ def lv_normalized(alpha):
         return [dx, dy]
 
     return lv
+
+def lv_0th_order(alpha):
+
+    def lv(t, z):
+        x, y = z
+        dx = - y
+        dy = alpha * x
+        return [dx / np.sqrt(alpha), dy / np.sqrt(alpha)]
+
+    return lv

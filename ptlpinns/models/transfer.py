@@ -3,7 +3,7 @@ from neurodiffeq import diff
 from neurodiffeq.generators import Generator1D
 import numpy as np
 from matplotlib import pyplot as plt
-from ptlpinns.perturbation import LPM, standard
+from ptlpinns.perturbation import LPM, standard, LKV
 from ptlpinns.models import training
 import time
 from typing import List
@@ -254,3 +254,101 @@ def compute_transfer_learning(transfer_model, optimizer, num_iter, equation_func
 
               if it % every == 0:
                      print(f"[iteration] {it} | total {total.item():.3e} | ode {ode.item():.3e} | ic {ic.item():.3e} | MAE {MAE:.3e} | time {total_time:.2f}")
+
+
+def compute_TL_LKV(alpha, ic, w_ode, w_ic, H_dict, invert=True):
+    A = get_A(w_0=np.sqrt(alpha), zeta=0)
+    AH = compute_AH(A, H_dict['H'])
+    H_star = H_dict["BHt"] + AH
+    H_dict["H_star"] = H_star
+    N = H_dict['N']
+    H_ic_0 = H_dict['H_ic']
+    start_time = time.perf_counter()
+
+    if invert:
+        M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
+        Minv = np.linalg.pinv(M)
+        H_dict["M_inv"] = Minv
+
+    H_dict["Rf"] = 0
+
+    # initial condition
+    Ric = w_ic * ((ic * H_ic_0.T).sum(axis=1)).reshape(-1, 1)
+    H_dict["R_ic"] = Ric
+
+    # compute W
+    R = Ric
+    W = H_dict["M_inv"] @ R  # shape (256, 1)
+    computational_time = time.perf_counter() - start_time
+
+    return W, computational_time
+
+
+def compute_perturbation_solution_LKV(beta_list, p_list, ic_list, alpha_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, w_sol = [], invert=True):
+
+    NN_TL_solution = []
+    TL_comp_time = []
+    perturbation_solution_list = []
+    for i, (alpha_transfer, beta_transfer) in enumerate(zip(alpha_list, beta_list)):
+        NN_TL_solution_w_0 = []
+        for p in p_list if all_p else [p_list[i]]:
+            perturbation_solution = []
+
+            xi_list, eta_list, xi_dot, eta_dot = [], [], [], []
+            if w_sol == []:
+                w_sol.append([np.sqrt(alpha_transfer)])
+
+            for j in range(p+1):
+                print(f"perturbation order {j}")
+                if j==0:
+
+                    W, TL_time = compute_TL_LKV(alpha = alpha_transfer, ic=ic_list[i], 
+                                                w_ode=training_log['w_ode'], w_ic=training_log['w_ic'],
+                                                  H_dict=H_dict, invert=invert)
+                    
+                    H_dict["R_ic"] = np.zeros_like(H_dict["R_ic"])
+                    perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+                else:
+
+                    if type(w_sol) == np.ndarray or type(w_sol) == list:
+
+                        forcing_time = time.perf_counter()
+
+                        xi_list.append(perturbation_solution[-1][:, 0])
+                        xi_dot.append(np.gradient(perturbation_solution[-1][:, 0], t_eval))
+                        eta_list.append(perturbation_solution[-1][:, 1])
+                        eta_dot.append(np.gradient(perturbation_solution[-1][:, 1], t_eval))
+
+                        if len(w_sol[i]) <= j:
+                            w_n = LKV.calc_w_n(w_sol[i], xi_list, xi_dot, eta_list, t_eval)
+                            w_sol[i].append(w_n)
+                        else:
+                            w_n = w_sol[i][j]
+
+                        xi_forcing = LKV.calculate_forcing_xi(w_n, w_sol[i], eta_list, xi_list, xi_dot)
+                        eta_forcing = LKV.calculate_forcing_eta(w_n, w_sol[i], eta_list, xi_list, eta_dot, alpha_transfer)
+
+                        force_perturbation = np.stack((eta_forcing, xi_forcing), axis=1)
+                        TL_time += time.perf_counter() - forcing_time
+                    else:
+                        raise ValueError("w_sol should either be provided as a list or numpy array")
+
+                    compute_start = time.perf_counter()
+                    W = compute_TL_with_F(force_perturbation, w_ode=training_log['w_ode'], H_dict=H_dict)
+                    perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+                    compute_time = time.perf_counter() - compute_start
+                    TL_time += compute_time
+
+            perturbation_solution_list.append(perturbation_solution)
+            NN_TL_solution_w_0.append(sum([(beta_transfer**k)*perturbation_solution[k] for k in range(p+1)]))
+            TL_comp_time.append(TL_time)
+
+        NN_TL_solution.append(np.stack(NN_TL_solution_w_0, axis=0).squeeze())
+    NN_TL_solution = np.stack(NN_TL_solution, axis=1 if all_p else 0)
+    if comp_time:
+        return NN_TL_solution, H_dict, TL_comp_time
+    else:
+        if len(alpha_list) == 1:
+            return NN_TL_solution, perturbation_solution, H_dict
+        else:
+            return NN_TL_solution, perturbation_solution_list, H_dict
