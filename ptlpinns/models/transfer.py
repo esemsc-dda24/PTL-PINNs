@@ -137,9 +137,9 @@ def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_lis
 
             perturbation_solution_list.append(perturbation_solution)
             NN_TL_solution_w_0.append(sum([(beta_transfer**k)*perturbation_solution[k] for k in range(p+1)]))
+            TL_comp_time.append(TL_time)
 
         NN_TL_solution.append(np.stack(NN_TL_solution_w_0, axis=0).squeeze())
-        TL_comp_time.append(TL_time)
     NN_TL_solution = np.stack(NN_TL_solution, axis=1 if all_p else 0)
     if comp_time:
         return NN_TL_solution, H_dict, TL_comp_time
