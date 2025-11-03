@@ -310,8 +310,6 @@ def compute_perturbation_solution_LKV(beta_list, p_list, ic_list, alpha_list, H_
                     
                     H_dict["R_ic"] = np.zeros_like(H_dict["R_ic"])
                     perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
-                    plt.plot(t_eval, perturbation_solution[0][:, 0])
-                    plt.plot(t_eval, perturbation_solution[0][:, 1])
                 else:
 
                     if type(w_sol) == np.ndarray or type(w_sol) == list:
@@ -329,10 +327,20 @@ def compute_perturbation_solution_LKV(beta_list, p_list, ic_list, alpha_list, H_
                         else:
                             w_n = w_sol[i][j]
 
+                        print(w_n)
+
                         xi_forcing = LKV.calculate_forcing_xi(w_n, w_sol[i], eta_list, xi_list, xi_dot)
                         eta_forcing = LKV.calculate_forcing_eta(w_n, w_sol[i], eta_list, xi_list, eta_dot, alpha_transfer)
+                        
+                        plt.plot(t_eval, xi_forcing, label=f"xi forcing order {j}")
+                        plt.legend()
+                        plt.show()
 
-                        force_perturbation = np.stack((eta_forcing, xi_forcing), axis=1)
+                        plt.plot(t_eval, eta_forcing, label=f"eta forcing order {j}")
+                        plt.legend()
+                        plt.show()
+
+                        force_perturbation = np.stack((xi_forcing / np.sqrt(alpha_transfer), eta_forcing / np.sqrt(alpha_transfer)), axis=1)
                         TL_time += time.perf_counter() - forcing_time
                     else:
                         raise ValueError("w_sol should either be provided as a list or numpy array")
@@ -340,6 +348,15 @@ def compute_perturbation_solution_LKV(beta_list, p_list, ic_list, alpha_list, H_
                     compute_start = time.perf_counter()
                     W = compute_TL_with_F(force_perturbation, w_ode=training_log['w_ode'], H_dict=H_dict)
                     perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+
+                    plt.plot(t_eval, perturbation_solution[-1][:, 0], label=f"xi order {j}")
+                    plt.legend()
+                    plt.show()
+
+                    plt.plot(t_eval, perturbation_solution[-1][:, 1], label=f"eta order {j}")
+                    plt.legend()
+                    plt.show()
+
                     compute_time = time.perf_counter() - compute_start
                     TL_time += compute_time
 
