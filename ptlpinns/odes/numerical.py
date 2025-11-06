@@ -60,3 +60,56 @@ def plot_multiple_ode_solutions(
     )
 
     plt.show()
+
+
+def numerical_solution_KPP(epsilons,D,polynomial, x_span,t_span,Nx,Nt,u0, forcing,bcs):
+    '''
+    Code taken from Samuel Auroy's paper.
+    '''
+    Numerical_solutions = np.zeros((len(epsilons),Nx,Nt))
+    for i in range(len(epsilons)):
+        x = np.linspace(x_span[0], x_span[1], Nx)
+        dx = x[1] - x[0]
+        t = np.linspace(t_span[0], t_span[1], Nt)
+
+        def rhs(t, u):
+            d2udx2 = np.zeros_like(u)
+    
+            u[0] = bcs[i][0](t)
+            u[-1] = bcs[i][1](t) 
+    
+            d2udx2[1:-1] = (u[2:] - 2*u[1:-1] + u[:-2]) / (dx**2)
+            return D * d2udx2 - epsilons[i] * polynomial[i](u) + forcing[i](x, t)
+
+        # Résolution
+        sol = solve_ivp(rhs, t_span=t_span, y0=u0[i](x), t_eval=t, method='RK45')
+
+        Numerical_solutions[i,:,:] = sol.y
+    return Numerical_solutions
+
+
+def numerical_solution_wave(epsilons,D,polynomial, x_span,t_span,Nx,Nt,u0, forcing,bcs):
+    '''
+    Code taken from Samuel Auroy's paper.
+    '''
+    Numerical_solutions = np.zeros((len(epsilons),Nx,Nt))
+    for i in range(len(epsilons)):
+        x = np.linspace(x_span[0], x_span[1], Nx)
+        dx = x[1] - x[0]
+        t = np.linspace(t_span[0], t_span[1], Nt)
+
+        def rhs(t, u):
+            d2udx2 = np.zeros_like(u)
+    
+            u[0] = bcs[i][0](t)
+            u[-1] = bcs[i][1](t) 
+    
+            d2udx2[1:-1] = (u[2:] - 2*u[1:-1] + u[:-2]) / (dx**2)
+    
+            return D * d2udx2 - epsilons[i] * polynomial[i](u) + forcing[i](x, t)
+
+        # Résolution
+        sol = solve_ivp(rhs, t_span=t_span, y0=u0[i](x), t_eval=t, method='RK45')
+
+        Numerical_solutions[i,:,:] = sol.y
+    return Numerical_solutions

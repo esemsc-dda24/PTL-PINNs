@@ -24,6 +24,8 @@ This repository contains the code used to develop the **PTL-PINN** — a **Pertu
 - **Performance vs. classical solvers**: demonstrated comparable accuracy and up to one order of mangitude of faster inference.
 - **Extensive benchmarks**: PTL-PINN succesfully solved weakly nonlinear formulations of the canonical oscillator across damping regimes, Lotka-Volterra, KPP-Fisher and Wave equation.
 
+![Graphical abstract](figures/graphical_abstract.png)
+
 ---
 
 ## Repository Structure
