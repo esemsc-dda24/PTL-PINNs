@@ -66,7 +66,7 @@ def w_absolute_error(w_series: List[np.ndarray], w_teor: float) -> np.ndarray:
     plt.tight_layout()
     plt.show()
 
-def epsilon_x_power(N: int, x: List, power: int):
+def epsilon_x_power(N: int, x: List, power):
     """
     Calculates the order-N contribution of ε * (x ** q)
 
@@ -81,13 +81,16 @@ def epsilon_x_power(N: int, x: List, power: int):
 
     lib = np if type(x[0]) == np.ndarray else torch
 
-    index_list = standard.index_tuples(N, power)
-    result = lib.zeros_like(x[0])
-    for indices in index_list:
-        term = standard.number_combinations(indices)
-        for i in indices:
-            term *= x[i]
-        result += term
+    for nonlinearity in power:
+
+        index_list = standard.index_tuples(N, nonlinearity[0])
+        result = lib.zeros_like(x[0])
+        for indices in index_list:
+            term = standard.number_combinations(indices)
+            for i in indices:
+                term *= x[i]
+            result += nonlinearity[1] * term
+
     return result
 
 def calc_A(N: int, x_ddot: List, w_list: List)-> List:
@@ -109,12 +112,12 @@ def calc_A(N: int, x_ddot: List, w_list: List)-> List:
 
     return A_term
 
-def calc_B(N: int, x_ddot: List, x: List, w_list: List, power: int = 3):
+def calc_B(N: int, x_ddot: List, x: List, w_list: List, power = [(3, 1)]):
     epsilon_cubed_term = - epsilon_x_power(N, x, power)
     A_term = - calc_A(N, x_ddot, w_list)
     return A_term + epsilon_cubed_term
 
-def calc_w_n(w_list: List, x:List, x_ddot: List, t, power = 3) -> int:
+def calc_w_n(w_list: List, x:List, x_ddot: List, t, power = [(3, 1)]) -> int:
     """
     Calcultes the frequency correction for order n using quantities of order n - 1
 

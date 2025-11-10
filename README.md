@@ -1,11 +1,9 @@
-# Perturbation-Guided Transfer Learning with Physics-Informed Neural Networks for Nonlinear Systems: PTL-PINN
+# Perturbation-Guided Transfer Learning with Physics-Informed Neural Networks for Nonlinear Systems
 
-**Author:** Duarte Alexandrino  
-**Supervisors:** Prof. Pavlos Protopapas, Dr. Ben Moseley  
-**MSc in Applied Computational Science and Engineering — Imperial College London**  
+**Authors:** Duarte Alexandrino, Prof. Pavlos Protopapas, Dr. Ben Moseley  
 **Contact:** d.alexandrino2010@gmail.com
 
-> Master’s thesis project proposing fast and accurate framework to solve weakly nonlinear oscillators by combining perturbation theory with one-shot transfer learning in Multi-Headed PINNs.
+> Submission to Journal of Computational Physics
 
 ---
 
@@ -13,18 +11,20 @@
 
 Accurately and efficiently solving nonlinear differential equations is crucial for modelling dynamic behavior across science and engineering. Physics-Informed Neural Networks (PINNs) have emerged as a powerful solution. However, these struggle to model nonlinear dynamics, suffering from limited generalization across problems and long training times. To address these limitations, we propose a perturbation-guided transfer learning framework for PINNs (PTL-PINN), which integrates perturbation theory with transfer learning to solve nonlinear oscillators efficiently.
 
-This repository contains the code used to develop the **PTL-PINN** — a **Perturbation-Guided Transfer Learning** framework for **Physics-Informed Neural Networks (PINNs)**. By training foundational PINN models on families of linear ODEs representative of the perturbation system and using one-shot transfer learning, PTL-PINN can compute solutions with the time complexity of matrix-vector multiplication.
+This repository contains the code used to develop the **PTL-PINN** — a **Perturbation-Guided Transfer Learning** framework for **Physics-Informed Neural Networks (PINNs)**. By training foundational PINN models on equations representative of the perturbation system and using one-shot transfer learning, PTL-PINN can compute solutions with the time complexity of matrix-vector multiplication.
 
 ---
 
 ## Key Contributions
 
-- **Novel Lindstedt-Poincare implementation**: new numerical and scalable implementation of the Lindstedt-Poincare for undamped nonlinear oscillators with polynomial nonlinearity
-- **Foundational PINNs models**: Multi-Headed-PINNs trained for **undamped**, **underdamped**,and **overdamped** regimes with Fourier features and sinusoidal activations to mitigate spectral bias.
-- **Evaluation of the pratical applicability of perturbation methods**: exploring resonance/near-resonance, convergence of the frequency series, and practical truncation criteria.
-- **Evaluation of one-shot transfer learning**: disussion and results for the reuse of latent representations
-- **Performance vs. classical solvers (RK45, Radau)** demonstrating comparable accuracy and up to one order of mangitude of faster inference.
+- **Novel Lindstedt-Poincare implementation**: new numerical and scalable implementation of the Lindstedt-Poincare for undamped nonlinear oscillators with polynomial nonlinearity.
+- **Foundational PINNs models**: Multi-Headed-PINNs trained on various linear equations can generalize to new equations nonlinear as fast as classical solvers.
+- **Evaluation of the pratical applicability of perturbation methods**: exploring resonance/near-resonance, convergence of the frequency series and practical truncation criteria.
+- **Evaluation of one-shot transfer learning**: disussion and results for the reuse of latent representations.
+- **Performance vs. classical solvers**: demonstrated comparable accuracy and up to one order of mangitude of faster inference.
+- **Extensive benchmarks**: PTL-PINN succesfully solved weakly nonlinear formulations of the canonical oscillator across damping regimes, Lotka-Volterra, KPP-Fisher and Wave equation.
 
+![Graphical abstract](figures/graphical_abstract.png)
 
 ---
 
@@ -59,19 +59,17 @@ PTL-PINNs/
 │   |
 │   └── perturbation/
 │   │   ├── __init__.py
-│   │   ├── standard.py         # standard perturbation
-│   │   └── LPM.py              # Lindstedt-Poincare method
+│   │   ├── standard.py         # Standard perturbation
+│   │   ├── LVK.                # Lindstedt-Poincare for the Lotka-Volterra
+│   │   └── LPM.py              # Lindstedt-Poincare for the canonical oscillators
 │   │
-│   └── results/
-│       ├── __init__.py
-│       ├── undamped.ipynb          # standard vs Lindstedt-Poincare
-│       ├── lpm_forcing.ipynb       # LPM forcing multiple passes
-│       ├── underdamped.ipynb       # underdamped results (and near-resonance)
-│       ├── overdamped.ipynb        # overdamped results (and ic blow-up)
-│       ├── klein_gordon.ipynb      # klein-gordon travelling wave solution
-│       └── time.ipynb              # timings: classic solvers vs. PTL-PINNs         
+│   └── results/                # notebooks for paper imgs
+│       ├── __init__.py     
+│       ├── LKV/                # Lotka-volterra equation imgs
+│       ├── oscillator/         # Canonical oscillators equation imgs
+│       └── PDEs/               # KPP-Fisher and Wave equation imgs
 │
-├── figures/                        # figures presented in the README.md
+├── figures/                    # figures presented in the README.md
 ├── pyproject.toml          
 └── README.md
 ```
@@ -98,13 +96,13 @@ Now you are set to explore the examples provided in ```ptlpinns/results/```.
 Multi-Headed-PINN uses a shared latent representation to approximate equations of
 similar form. It maps time to a latent representation that is used when inferring for a new parameter regime. To mitigate the spectral bias observed when training oscillatory solutions, we use Fourier feature embeddings at the input layer sinusoidal activation functions.
 
-![PTL-PINN architecture](figures/MH-PINN.png)
+![PTL-PINN architecture](figures/MH_PINN_PDE.jpg)
 
 ---
 
 ## Training equations
 
-We train a different model for the undamped, underdamped and overdamped regimes. The following figures present the linear differential equations used in training for each damping regime:
+In our manuscript, we show how the training of the PTL-PINN is crucial to obtain accurate results. We choose the training equations so that they are representative of the perturbative system we solve. In this subsection, we show as an example the training equations considered for the canonical oscillator.
 
 ### Undamped 
 
@@ -122,48 +120,12 @@ We train a different model for the undamped, underdamped and overdamped regimes.
 
 ## Results
 
-Here we summarise our finds by presenting the figures shown in the thesis.
+We benchmark PTL-PINNs across a variety of ODEs and PDEs.
 
-### Limitations of perturbation methods
+For example, the solution for undamped, underdamped and overdamped oscillator is shown in the next image:
 
-- Standard perturbation method fails to solve undamped oscillator, due to resonance:
+![Canonical Oscillator Solution](figures/canonical_oscillator.jpg)
 
-![Proof Resonance](figures/proof_of_resonance.png)
+Another of the ODEs we solve is the equilibrium-centered Lotka-Volterra equation:
 
-- The Lindstedt-Poincare method (LPM) is able to solve the undamped oscillator
-
-![Standard vs LPM](figures/standard_vs_LPM_undamped.png)
-
-- In the particular low damping and forced case, the underdamped solution diverges, due to near-resonance:
-
-![Proof of Near Resonance](figures/proof_of_near_resonance_underdamped.png)
-
-- Initial condition is a fundamental limitation of perturbation method but the uniform approach can improve convergence:
-
-![Overdamped for different ICs](figures/overdamped_different_ics.png)
-
-
-### Importance of pre-training
-
-- Models have difficulties generalizing to damped regimes for which they haven't been trained:
-
-![Models solving different overdamped oscillator](figures/pretty_overdamped_different_zeta.png)
-
-- Lindstedt-Poincare frequency convergence depends on the pretraining:
-
-![Series convergence Lindstedt-Poincare](figures/LPM_convergence_multiple.png)
-
-### Generalization of PTL-PINNs
-
-- PTL-PINNs can solve oscillator with nonlinearities up to any power:
-
-![Table multiple nonlinearity](figures/table_multiple_nonlineariety.png)
-
-- PTL-PINNs can be used for PDEs (ongoing work...). Here, through a variable change we solve the Klein-Gordon equation:
-
-![Klein Gordon equation solution](figures/Klein_Gordon_solution.png)
-
-
-### Computational time
-
-![Computational time comparison](figures/table_computational_time.png)
+![Lotka-Volterra Solution](figures/lotka_volterra.jpg)

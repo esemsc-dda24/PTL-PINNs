@@ -167,7 +167,7 @@ def plot_IAE_and_subplots(PINN_x_solution_series, numerical_undamped_duffing,
 
     plt.show()
 
-def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
+def epsilon_x_power_standard(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
     """
     Calculates the order-N contribution of ε * (x ** q)
 
@@ -180,14 +180,14 @@ def epsilon_x_power(N: int, x: List[np.ndarray], power: int) -> np.ndarray:
         np.ndarray: ε * x^power term at order N
     """
     index_list = index_tuples(N, power)
-    result = np.zeros_like(x[0])
+    result = np.zeros_like(x[0][:, 0])
+
     for indices in index_list:
         term = number_combinations(indices)
         for i in indices:
-            term *= x[i]
+            term *= x[i][:, 0]
         result += term
     return result
-
 
 
 def plot_comparison_standard_vs_lpm(t_eval, t_eval_lpm, perturbation_solution_standard, NN_TL_solution_standard,
@@ -372,6 +372,15 @@ def plot_error_by_order(t_eval, PINN_solution, numerical_list, p_list, param_lis
 
         plt.legend()
         plt.show()
+
+
+def calculate_forcing(j, power, perturbation_solution):
+
+    result = np.zeros_like(perturbation_solution[0][:, 0])
+    for nonlinearity in power:
+        result -= nonlinearity[1] * epsilon_x_power_standard(j, perturbation_solution, nonlinearity[0])
+
+    return result
 
 
 def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
