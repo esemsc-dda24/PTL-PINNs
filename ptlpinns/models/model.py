@@ -74,6 +74,29 @@ class Multihead_model_fourier(nn.Module):
             concat = torch.cat((first, second), axis=1)
             output.append(concat)
         return torch.stack(output), out
+    
+
+class Multihead_model_PDE(nn.Module):
+    def __init__(self, k, act=nn.Tanh(), bias=False):
+        super().__init__()
+        self.act = act
+        self.linear1 = nn.Linear(2, 100)
+        self.linear3 = nn.Linear(100,100) 
+        self.linear4 = nn.Linear(100, 350)
+        self.final_layers = nn.ModuleList([nn.Linear(350, 1, bias=bias) for _ in range(k)])
+        self.k = k
+        self.double()
+
+    def forward(self, x):
+        out = self.act(self.linear1(x))
+        out = self.act(self.linear3(out))
+        out = self.act(self.linear4(out))
+
+        output = []
+        for i in range(self.k):
+            head = self.final_layers[i](out)   
+            output.append(head)
+        return torch.stack(output), out 
 
 
 def load_model(path, name):
