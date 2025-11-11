@@ -115,30 +115,51 @@ def solution_wave(epsilons, c, polynomial, x_span, t_span, Nx, Nt, u0, bcs, forc
 
 def plot_solution_PDE(solution, mesh_x, mesh_t, surface=True, title=None, rotation=(25, -60)):
     """
-    Code to plot PDE solution. Assumes solution (Nt, Nx).
+    Code to plot PDE solution. Assumes solution shape (Nt, Nx).
+    Ensures that zero is always included in the color scale.
     """
-    
+
     fig = plt.figure(figsize=(10, 6))
     ax = fig.add_subplot(111, projection='3d' if surface else None)
 
+    # --- Force the colormap to include zero ---
+    data_min = solution.min()
+    data_max = solution.max()
+
+    # If zero is outside the data range, extend the range
+    cmin = min(data_min, 0)
+    cmax = max(data_max, 0)
+
+    # Optional: symmetric color range for comparability
+    # s = max(abs(cmin), abs(cmax))
+    # cmin, cmax = -s, s  # uncomment if you want symmetric around zero
+
     if surface:
-        ax.plot_surface(mesh_x, mesh_t, solution, cmap='viridis')
+        surf = ax.plot_surface(mesh_x, mesh_t, solution,
+                               cmap='viridis',
+                               vmin=cmin, vmax=cmax)
         ax.view_init(rotation[0], rotation[1])
         ax.set_xlabel("$x$", fontsize=13)
         ax.set_ylabel("$t$", fontsize=13)
         ax.set_zlabel("u", fontsize=13)
-        plt.tick_params(axis='both', which='major', labelsize=14)
+        fig.colorbar(surf, shrink=0.7)
 
     else:
-        min_level = solution.min() 
-        levels = np.linspace(min_level, solution.max(), 20)
-        Cs = ax.contourf(mesh_x, mesh_t, solution, levels=levels, extend="min")
+        # Generate consistent levels INCLUDING zero
+        levels = np.linspace(cmin, cmax, 21)
+        Cs = ax.contourf(mesh_x, mesh_t, solution,
+                         levels=levels,
+                         extend="both",
+                         cmap='viridis')
+
         cbar = fig.colorbar(Cs)
-        new_ticks = np.linspace(min_level, solution.max(), 20)[::2]
-        cbar.set_ticks(new_ticks)
         cbar.ax.tick_params(labelsize=12)
+
         ax.set_xlabel("$x$", fontsize=16)
         ax.set_ylabel("$t$", fontsize=16)
+
+    if title:
+        plt.title(title)
 
     plt.show()
 

@@ -259,343 +259,98 @@ def generate_interior_tensor(IG=(30, 30), x_span=(0, 1),
     interior_tensor = torch.cat([x, t], dim=1)
     return (x, t, interior_tensor)
 
-#######################Plotting functions########################
-def plot_loss(loss_trace, pde_trace, bc_trace, ic_trace, data_trace=None, path=None):
-    num_iter = len(loss_trace)
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3), sharex=True, layout='constrained')
-    ax[0].plot(range(1, num_iter + 1), loss_trace, label='Total Loss')
-    ax[1].plot(range(1, num_iter + 1), pde_trace, label='PDE Loss')
-    ax[1].plot(range(1, num_iter + 1), ic_trace, label="IC Loss")
-    ax[1].plot(range(1, num_iter + 1), bc_trace, label="BC Loss")
-    if data_trace:
-        ax[1].plot(range(1, num_iter + 1), data_trace, label="Data Loss")
-    ax[0].semilogy()
-    ax[0].xaxis.set_tick_params(labelsize=11)
-    ax[0].yaxis.set_tick_params(labelsize=12)
-    ax[0].set_xlabel("Number of iterations", fontsize=12)
-    ax[0].set_title("Total Loss Value vs. Iteration", fontsize=14)
-    ax[0].grid()
-    ax[0].legend(loc="best", fontsize=11)
+def generate_initial_tensor(Nic, x_span, require_grad=True, method='equally-spaced'):
+    x_samples = Generator1D(size=Nic, method=method, t_min=x_span[0], t_max=x_span[1]).get_examples()
+    x_initial = x_samples.unsqueeze(1)
+    t_initial = torch.zeros_like(x_samples).unsqueeze(1)
+    x_initial = x_initial.cpu()
+    t_initial = t_initial.cpu()
 
-    ax[1].semilogy()
-    ax[1].xaxis.set_tick_params(labelsize=11)
-    ax[1].yaxis.set_tick_params(labelsize=12)
-    ax[1].set_xlabel("Number of iterations", fontsize=12)
-    ax[1].set_title("PDE and IC Loss Value vs. Iteration", fontsize=14)
-    ax[1].grid()
-    ax[1].legend(loc="best", fontsize=11)
+    if require_grad:
+        x_initial.requires_grad_()
+        t_initial.requires_grad_()
 
-    fig.supylabel("Loss", fontsize=18)
-    if path is not None:
-        plt.savefig(path)
+    initial_tensor = torch.cat([x_initial, t_initial], dim=1)  # (N_initial, 2)
+    return (x_initial, t_initial, initial_tensor)
 
-
-def plot_solution1(solution, mesh_x, mesh_t, surface=True, path=None, title=None, rotation=(25, -60)):
-    """
-    args:
-        solution (np.ndarray): shape (Nx, Nt) or (Nt, Nx)
-        mesh_x, mesh_t (np.ndarray): meshgrids of size (Nx, Nt)
-        surface (bool): True for 3D surface plot, False for contourf
-        path (str): path to save the figure
-        title (str): title of the plot
-        rotation (tuple): (elev, azim) for 3D view
+def generate_boundary_tensor(Nbc, t_span, x, require_grad=True, method='equally-spaced'):
+    ''' x is where the boundary (float) condition is applied, t_span is the time span of the problem
+    '''
+    t_samples = Generator1D(size=Nbc, method=method, t_min=t_span[0], t_max=t_span[1]).get_examples() # t_max is 1 because time is normalized to [0,1]
     
-    """
+    t_boundary = t_samples.unsqueeze(1)
+    x_boundary = x*torch.ones_like(t_samples).unsqueeze(1)
+    x_boundary = x_boundary.cpu()
+    t_boundary = t_boundary.cpu()
+
+    if require_grad:
+        x_boundary.requires_grad_()
+        t_boundary.requires_grad_()
+
+    boundary_tensor = torch.cat([x_boundary, t_boundary], dim=1)  # (N_initial, 2)
+    return (x_boundary, t_boundary, boundary_tensor)
+
+def compute_H2x(H, x):
+    output = []
+    for i in range(H.shape[1]):
+        output.append(diff(H[:, i].reshape(-1, 1), x, order = 2).detach().numpy())
+    return np.concatenate(output, axis=1)
+
+def compute_Ht(H, t):
+    output = []
+    for i in range(H.shape[1]):
+        output.append(diff(H[:, i].reshape(-1, 1), t).detach().numpy())
+    return np.concatenate(output, axis=1)
+
+def compute_H_dict(model, IG, Nic,Nbc, bias, x_span, t_span, log):
+    model.to('cpu')
+    # generate samples
+    # define the interior set used to do transfer learning on cpu
+    x, t, interior_tensor = generate_interior_tensor(IG=IG, x_span=x_span, t_span=t_span, require_grad=True)
+    _, _, initial_tensor = generate_initial_tensor(Nic=Nic, x_span=x_span, require_grad=True, method='equally-spaced')
+    _, _, boundary_tensor_left = generate_boundary_tensor(Nbc=Nbc, t_span=t_span, x = 0, require_grad=True, method='equally-spaced')
+    _, _, boundary_tensor_right = generate_boundary_tensor(Nbc=Nbc, t_span=t_span, x = log['domain_info']['L'], require_grad=True, method='equally-spaced')
+   
+    # compute the hidden space H evaluated at the interior
+    _, H = model(interior_tensor)  # shape (IG0*IG1, W)
+    # compute the hidden space evaluated at the boundary
+    _, H_bc_left = model(boundary_tensor_left)  # shape (Nbc, W)
+    _, H_bc_right  = model(boundary_tensor_right)
+
+    # compute the hidden space evaluated at the initial condition
+    _, H_ic = model(initial_tensor)  # shape (Nic, W)
+    # compute the gradients of the hidden H in the interior data points
+    print("Differentiating H w.r.t. x now...")
+    H2x = compute_H2x(H, x)  # of shape (IG0*IG1, W)
+    print("Finished computing H2x.")
+
+    print("Differentiating H w.r.t. t now...")
+    Ht = compute_Ht(H, t)  # of shape (IG0*IG1, W)
+    print("Finished computing Ht")
+
+    # detach the H
+    H = H.detach().numpy()  # shape (IG0*IG1, W)
+    H_ic = H_ic.detach().numpy()  # shape (Nic, W)
+    H_bc_left = H_bc_left.detach().numpy()  # shape (Nbc, W)    
+    H_bc_right = H_bc_right.detach().numpy()
+
+    # now add another dimension to the H and Hx Ht if needed
+    # all zeros for Hx and Ht and all ones for H
+    if bias:
+        H = np.hstack((H, np.ones((H.shape[0], 1))))
+        H_ic = np.hstack((H_ic, np.ones((H_ic.shape[0], 1))))
+        H_bc_left = np.hstack((H_bc_left, np.ones((H_bc_left.shape[0], 1))))
+        H_bc_right = np.hstack((H_bc_right, np.ones((H_bc_right.shape[0], 1))))
+        H2x = np.hstack((H2x, np.zeros((H2x.shape[0], 1))))
+        Ht = np.hstack((Ht, np.zeros((Ht.shape[0], 1))))
+
     
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111, projection='3d' if surface else None)
-    solution = solution.swapaxes(0, 1)  # shape (Nx, Nt)
-    if surface:
-        ax.plot_surface(mesh_x, mesh_t, solution, cmap='viridis')
-        ax.view_init(rotation[0], rotation[1])
-        ax.set_xlabel("$x$", fontsize=13)
-        ax.set_ylabel("$t$", fontsize=13)
-        ax.set_zlabel("u", fontsize=13)
-    else:
-        min_level = solution.min() ##if ((solution.min() > 0) and (solution.min() < 1e-10)) else 0.
-        levels = np.linspace(min_level, solution.max(), 20)
-        Cs = ax.contourf(mesh_x, mesh_t, solution, levels=levels, extend="min")
-        cbar = fig.colorbar(Cs)
-        new_ticks = np.linspace(min_level, solution.max(), 20)[::2]
-        cbar.set_ticks(new_ticks)
-        cbar.ax.tick_params(labelsize=12)
-        ax.set_xlabel("$x$", fontsize=16)
-        ax.set_ylabel("$t$", fontsize=16)
+    DH2x= log['equation_info']['D'] * H2x
+    H_star = Ht - DH2x  # (I, W)(1/log['domain_info']['T'])*
 
-    ax.set_title(title if title is not None else "PINN solution", fontsize=16)
-
-    if path is not None:
-        fig.savefig(path, bbox_inches='tight')
-    else:
-        plt.show()
-
-
-
-def plot_4_heads(NN_solution, mesh_x, mesh_t, surface=True, title_prefix="Tête", path=None, rotation=(25, -60)):
-    """
-    Affiche les sorties 3D ou en contours pour les 4 têtes d’un PINN.
-    Args:
-        NN_solution (np.ndarray): shape (4, Nx, Nt)
-        mesh_x, mesh_t (np.ndarray): meshgrids de taille (Nx, Nt)
-        surface (bool): True pour 3D surface, False pour contourf
-        title_prefix (str): texte à mettre dans les titres
-        path (str): chemin pour sauvegarde (facultatif)
-        rotation (tuple): (elev, azim) pour la vue 3D
-    """
-    fig, axes = plt.subplots(1, 4, figsize=(20, 5),
-                             subplot_kw={'projection': '3d'} if surface else {},
-                             tight_layout=True)
-    NN_solution = NN_solution.swapaxes(1, 2)
-    if isinstance(axes, np.ndarray):
-        axes = axes.flatten()
-    else:
-        axes = [axes]
-
-    for i in range(4):
-        Z = NN_solution[i, :, :]
-        ax = axes[i]
-
-        if surface:
-            ax.plot_surface(mesh_x, mesh_t, Z, cmap='viridis')
-            ax.view_init(elev=rotation[0], azim=rotation[1])
-        else:
-            min_level = Z.min() if (0 < Z.min() < 1e-10) else 0.
-            levels = np.linspace(min_level, Z.max(), 20)
-            Cs = ax.contourf(mesh_x, mesh_t, Z, levels=levels, extend="min")
-            plt.colorbar(Cs, ax=ax, shrink=0.8)
-
-        ax.set_xlabel("$x$")
-        ax.set_ylabel("$t$")
-        if surface:
-            ax.set_zlabel("$u$")
-        ax.set_title(f"{title_prefix} {i}")
-
-    if path is not None:
-        plt.savefig(path, bbox_inches="tight")
-    plt.show()
-
-def plot_6_heads(NN_solution, mesh_x, mesh_t, surface=True, title_prefix="Tête", path=None, rotation=(25, -60)):
-    """
-    Affiche les sorties 3D ou en contours pour les 4 têtes d’un PINN.
-    Args:
-        NN_solution (np.ndarray): shape (4, Nx, Nt)
-        mesh_x, mesh_t (np.ndarray): meshgrids de taille (Nx, Nt)
-        surface (bool): True pour 3D surface, False pour contourf
-        title_prefix (str): texte à mettre dans les titres
-        path (str): chemin pour sauvegarde (facultatif)
-        rotation (tuple): (elev, azim) pour la vue 3D
-    """
-    fig, axes = plt.subplots(2, 3, figsize=(20, 10),
-                             subplot_kw={'projection': '3d'} if surface else {},
-                             tight_layout=True)
-    NN_solution = NN_solution.swapaxes(1, 2)
-    if isinstance(axes, np.ndarray):
-        axes = axes.flatten()
-    else:
-        axes = [axes]
-
-    for i in range(6):
-        Z = NN_solution[i, :, :]
-        ax = axes[i]
-
-        if surface:
-            ax.plot_surface(mesh_x, mesh_t, Z, cmap='viridis')
-            ax.view_init(elev=rotation[0], azim=rotation[1])
-        else:
-            min_level = Z.min() if (0 < Z.min() < 1e-10) else 0.
-            levels = np.linspace(min_level, Z.max(), 20)
-            Cs = ax.contourf(mesh_x, mesh_t, Z, levels=levels, extend="min")
-            plt.colorbar(Cs, ax=ax, shrink=0.8)
-
-        ax.set_xlabel("$x$")
-        ax.set_ylabel("$t$")
-        if surface:
-            ax.set_zlabel("$u$")
-        ax.set_title(f"{title_prefix} {i}")
-
-    if path is not None:
-        plt.savefig(path, bbox_inches="tight")
-    plt.show()
-
-def load_pretrain_model(model_name, mesh_grid, Nx, Nt):
     
-    model_path = os.path.join("training_log", model_name, "model.pickle")
-    with open(model_path, 'rb') as f:
-        model = pickle.load(f)
-    log_path = os.path.join("training_log", model_name, "log.pickle")
-    with open(log_path, 'rb') as f:
-        log = pickle.load(f)
-
-    NN_solution, _ = model(mesh_grid.cpu())
-    NN_solution = NN_solution.cpu().detach().numpy()
-    NN_solution = np.swapaxes(NN_solution, 2, 1).reshape(-1,Nx, Nt)
-    
-
-    return model, log, NN_solution
-
-######################functions for forcing functions########################
-
-def forcing_function_constant(input):
-    return torch.ones((input.shape[0], 1), dtype=torch.double) #forcing f=1
-    # return torch.zeros((input.shape[0], 1), dtype=torch.double) #forcing f=0
-
-def forcing_function_t(input):
-    t = input[:, 1].unsqueeze(1)  
-    return t
-
-def forcing_function_t2(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 2
-
-def forcing_function_t3(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 3
-
-def forcing_function_t4(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 4
-
-def forcing_function_t5(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 5
-
-def forcing_function_t6(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 6   
-
-def forcing_function_t7(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 7
-
-def forcing_function_t9(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 9
-
-def forcing_function_t11(input):
-    t = input[:, 1].unsqueeze(1)
-    return t ** 11  
-
-def forcing_sincos(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.sin(t)*torch.cos(x)
-
-def forcing_sin2cos3(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.sin(2*t)*torch.cos(3*x)
-
-def forcing_xt(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return x * t
-
-def forcing_exponential(input):
-    t = input[:, 1].unsqueeze(1)
-    x = input[:, 0].unsqueeze(1)
-    return torch.exp(-0.1*((t-0.5*torch.ones_like(t)**2) + (x - 0.5*torch.ones_like(x)**2)))  
-
-
-def forcing_atan(input):
-    t = input[:, 1].unsqueeze(1)
-    x = input[:, 0].unsqueeze(1)
-    return torch.arctan(t + x)  
-
-def forcing_sinxt(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.sin(x + t)
-
-def forcing_xt2(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return x ** 2 + t ** 2
-
-def forcing_xexp(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.exp(-t)*x
-
-def forcing_zeros(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.zeros_like(x)  # Example forcing function
-
-
-def bc_exp(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.exp(-t)
-
-def bc_sin(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.sin(- t)  # Example boundary condition function
-
-
-def initial_step(input):
-    N = input.shape[0]
-    return torch.cat([torch.ones(N//2),torch.zeros(N//2)]) 
-
-def initial_condition0(input):
-    return torch.zeros((input.shape[0], 1), dtype=torch.double)     ## initial condition u(x,0)=0
-
-def ic_sin(input):
-    x = input[:, 0].unsqueeze(1)
-    t = input[:, 1].unsqueeze(1)
-    return torch.sin(x)  # Example boundary condition function
-
-def ic_stepexp1(input):
-    '''1/(1+torch.exp(10*(x-1)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(10*(x-1)))  # Example initial condition function
-
-def ic_stepexp125(input):
-    '''1/(1+torch.exp(10*(x-1.25)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(10*(x-1.25)))  # Example initial condition function
-
-def ic_stepexp075(input):
-    '''1/(1+torch.exp(10*(x-0.75)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(10*(x-0.75)))  # Example initial condition function
-
-def ic_stepexp05(input):
-    '''1/(1+torch.exp(10*(x-0.5)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(20*(x-0.5)))  # Example initial condition function
-
-def ic_stepexp09(input):
-    '''1/(1+torch.exp(10*(x-0.9)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(10*(x-0.9)))  # Example initial condition function
-
-def ic_stepexp15(input):
-    '''1/(1+torch.exp(10*(x-1.5)))
-    '''
-    x =input[:, 0].unsqueeze(1)
-    return 1/(1+torch.exp(10*(x-1.5)))  # Example initial condition function
-
-
-def echelon_square(x_min, x_max, val,sigma=10):
-    
-    def forcing_function_echelon(input):
-        x = input[:, 0].unsqueeze(1)
-        return val*(1/(1+torch.exp(-sigma*(x-x_min))) + 1/(1+torch.exp(sigma*(x-x_max)))-1)
-    
-    return forcing_function_echelon
-
-
-def constant_function(constant):
-    '''return a function input  ((x,t)in torch) -> constant, can be given as function.
-
-    for example constant_function(0) will return a function that returns 0 for any input.
-    '''
-    def forcing_function_constant(input):
-        return constant*torch.ones_like(input[:, 0].unsqueeze(1))
-    return forcing_function_constant
+    H_dict = {'H': H, 'H_ic': H_ic, 'H_bc_left': H_bc_left, 'H_bc_right': H_bc_right,
+              'H2x': H2x, 'Ht': Ht,
+              'IG': IG, 'Nic': Nic,'Nbc': Nbc,
+              'DH2x': DH2x,'H_star': H_star}
+    return H_dict
