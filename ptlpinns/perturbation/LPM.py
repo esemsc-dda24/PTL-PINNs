@@ -144,7 +144,7 @@ def calc_w_n(w_list: List, x:List, x_ddot: List, t, power = [(3, 1)]) -> int:
 
     return w_n
 
-def calculate_forcing(w_n: float, w_list: List, x:List, x_ddot: List, power = 3) -> np.ndarray:
+def calculate_forcing(w_n: float, w_list: List, x:List, x_ddot: List, power = [(3,1)]) -> np.ndarray:
     """"
     Calculates forcing for order n differential equation. Depends only on x and w from order 0 to n - 1.
     """
