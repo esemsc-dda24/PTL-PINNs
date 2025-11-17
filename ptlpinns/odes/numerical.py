@@ -2,6 +2,8 @@ from scipy.integrate import solve_ivp
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+from matplotlib.ticker import MaxNLocator
+import matplotlib.ticker as ticker
 
 def solve_ode_equation(ode, t_span, t_eval, y0, method="RK45", rtol=1e-10, atol=1e-10):
     """
@@ -62,7 +64,7 @@ def plot_multiple_ode_solutions(
     plt.show()
 
 
-def solution_KPP(epsilons,D,polynomial, x_span,t_span,Nx,Nt,u0,forcing,bcs, method="RK45"):
+def solution_KPP(epsilons,D,polynomial, x_span,t_span,Nx,Nt,u0,forcing,bcs, method="RK45", atol=1e-10, rtol=1e-10):
 
     Numerical_solutions = np.zeros((len(epsilons),Nx,Nt))
     for i in range(len(epsilons)):
@@ -79,7 +81,7 @@ def solution_KPP(epsilons,D,polynomial, x_span,t_span,Nx,Nt,u0,forcing,bcs, meth
             d2udx2[1:-1] = (u[2:] - 2*u[1:-1] + u[:-2]) / (dx**2)
             return D * d2udx2 - epsilons[i] * polynomial[i](u) + forcing[i](x, t)
 
-        sol = solve_ivp(rhs, t_span=t_span, y0=u0[i](x), t_eval=t, method=method, rtol=1e-10, atol=1e-10)
+        sol = solve_ivp(rhs, t_span=t_span, y0=u0[i](x), t_eval=t, method=method, rtol=rtol, atol=atol)
 
         Numerical_solutions[i,:,:] = sol.y
     return Numerical_solutions
@@ -113,55 +115,73 @@ def solution_wave(epsilons, c, polynomial, x_span, t_span, Nx, Nt, u0, bcs, forc
     return Numerical_solutions
 
 
+
 def plot_solution_PDE(solution, mesh_x, mesh_t, surface=True, title=None, rotation=(25, -60)):
     """
-    Code to plot PDE solution. Assumes solution shape (Nt, Nx).
-    Ensures that zero is always included in the color scale.
+    Plot PDE solution (Nt, Nx) with:
+      • zero always included in color scale
+      • colorbar values ALWAYS shown in scientific notation (e.g., 1.23e-4)
     """
 
     fig = plt.figure(figsize=(10, 6))
     ax = fig.add_subplot(111, projection='3d' if surface else None)
 
-    # --- Force the colormap to include zero ---
-    data_min = solution.min()
-    data_max = solution.max()
-
-    # If zero is outside the data range, extend the range
+    # --- FORCE zero into color range ---
+    data_min = float(solution.min())
+    data_max = float(solution.max())
     cmin = min(data_min, 0)
     cmax = max(data_max, 0)
 
-    # Optional: symmetric color range for comparability
-    # s = max(abs(cmin), abs(cmax))
-    # cmin, cmax = -s, s  # uncomment if you want symmetric around zero
-
     if surface:
-        surf = ax.plot_surface(mesh_x, mesh_t, solution,
-                               cmap='viridis',
-                               vmin=cmin, vmax=cmax)
+        surf = ax.plot_surface(
+            mesh_x, mesh_t, solution,
+            cmap='viridis',
+            vmin=cmin, vmax=cmax
+        )
         ax.view_init(rotation[0], rotation[1])
         ax.set_xlabel("$x$", fontsize=13)
         ax.set_ylabel("$t$", fontsize=13)
         ax.set_zlabel("u", fontsize=13)
-        fig.colorbar(surf, shrink=0.7)
+
+        cbar = fig.colorbar(surf, shrink=0.7)
 
     else:
-        # Generate consistent levels INCLUDING zero
         levels = np.linspace(cmin, cmax, 21)
-        Cs = ax.contourf(mesh_x, mesh_t, solution,
-                         levels=levels,
-                         extend="both",
-                         cmap='viridis')
+        if not np.any(np.isclose(levels, 0.0)):
+            levels = np.sort(np.append(levels, 0.0))
+
+        Cs = ax.contourf(
+            mesh_x, mesh_t, solution,
+            levels=levels,
+            extend="both",
+            cmap='viridis'
+        )
 
         cbar = fig.colorbar(Cs)
-        cbar.ax.tick_params(labelsize=12)
 
         ax.set_xlabel("$x$", fontsize=16)
         ax.set_ylabel("$t$", fontsize=16)
+
+    def sci_fmt(x, pos):
+        return f"{x:.2e}"   # format: 1.23e-04
+
+    formatter = ticker.FuncFormatter(sci_fmt)
+
+    # Apply formatter to colorbar AND to its mappable
+    cbar.formatter = formatter          # main formatter
+    cbar.ax.yaxis.set_major_formatter(formatter)   # axis formatter
+    cbar.update_ticks()                 # force refresh
+
+    # Remove offset text (the ×10ⁿ at the top)
+    cbar.ax.yaxis.offsetText.set_visible(False)
+
+    cbar.ax.tick_params(labelsize=12)
 
     if title:
         plt.title(title)
 
     plt.show()
+
 
 
 def kpp_fisher_u0(x, t, L, D):

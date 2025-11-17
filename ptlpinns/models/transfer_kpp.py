@@ -11,6 +11,7 @@ from neurodiffeq.generators import Generator1D
 import numpy as np
 from matplotlib import pyplot as plt
 import time
+from neurodiffeq.generators import Generator2D,Generator1D
 
 
 def generate_initial_tensor(Nic, x_span, require_grad=True, method='equally-spaced'):
@@ -196,8 +197,6 @@ def compute_Rf(H_dict, w_pde, forcing_function, input=None):
 def compute_R_ic(H_dict, w_ic,log, ic_value=None, ic_function=None):
 
     H_ic_0 = H_dict['H_ic']
-    
-    
     N_ic = H_dict['Nic']
 
     # initial condition
