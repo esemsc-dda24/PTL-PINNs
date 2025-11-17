@@ -162,7 +162,7 @@ def compute_TL_with_F(forcing_function, w_pde, H_dict, input=None):
     '''
     if the forcing is a function, specify an input
     '''
-    start_time = time.time()
+    start_time = time.perf_counter()
     # forcing function
     if input is not None:
         forcing_value = forcing_function(input).reshape(-1, 1).cpu().detach().numpy()
@@ -172,9 +172,9 @@ def compute_TL_with_F(forcing_function, w_pde, H_dict, input=None):
     
     # compute W
     R = Rf + H_dict['R_ic'] + H_dict['R_bcs'] 
-    W = H_dict['M_inv'] @ R  # shape 
-    
-    computational_time = time.time() - start_time
+    W = H_dict['M_inv'] @ R 
+    computational_time = time.perf_counter() - start_time
+
     return W, computational_time
 
 
@@ -414,16 +414,13 @@ def compute_perturbation_solution_polynomial_complete(p, epsilon, forcing, H_dic
                                                           H_dict=H_dict, input=input)
             perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
 
-            ### compute R_bc 0 for the next equations
-            
-            # _,_,_,H_dict = compute_R_bcs(H_dict,boundary_functions= None, boundary_values=[0,0] ,w_bc=training_log['w_bc'], log=training_log)
-            # # _,H_dict = compute_R_ic(H_dict,w_ic=training_log['w_ic'], log=training_log,ic_value=0)
-            H_dict['R_ic'] = np.zeros_like(H_dict['R_ic'])  # set the initial condition to 0 for the next equations
             H_dict['R_bcs'] = np.zeros_like(H_dict['R_bcs'])
         else:
             force_perturbation = 0
+
+            time_start = time.perf_counter()
             for [p_k, k] in Polynomial:
-                if k==0 and j==1: ## if the polynomial has a constant term, we need to add it only for the first perturbation equation
+                if k==0 and j==1:
                     force_perturbation -= p_k
                 if k!=0:    
                     force_function_index = force_func_perturbation_monomial(j-1, k)
@@ -432,12 +429,13 @@ def compute_perturbation_solution_polynomial_complete(p, epsilon, forcing, H_dic
                         for i in range(1, len(index_list) - 1):  # last element is coefficient
                             term *= perturbation_solution[index_list[i]][:, 0]
                         force_perturbation -= index_list[-1] * p_k * term
-
+            time_end = time.perf_counter()
+            TL_time += time_end - time_start
             
-            W, time = compute_TL_with_F(forcing_function=force_perturbation, w_pde=training_log["w_pde"],
+            W, time_iter = compute_TL_with_F(forcing_function=force_perturbation, w_pde=training_log["w_pde"],
                                                           H_dict=H_dict, input=None) ###Now input is none because we treat force pertubation as an array with the value of the function
             perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
-            TL_time += time
+            TL_time += time_iter
     NN_TL_solution = sum([(epsilon**k)*perturbation_solution[k] for k in range(p+1)])
     return NN_TL_solution, TL_time
 

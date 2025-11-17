@@ -179,7 +179,7 @@ def loss_wave(model, interior_grid, x_span, t_span, Nic, Nbc,
 def train(model, optimizer, num_iter, Forcing_functions, boundary_values, initial_value,
           coeff, equation, interior_grid=(30, 30), x_span=(0, 1), initial_Neumann = None, 
           t_span=(0, 1), Nic=100, Nbc=100, every=100, save_epoch=None,
-          pde_weight=1, bc_weight=1, ic_weight=1, scheduler=None, method='equally-spaced-noisy'):
+          pde_weight=1, bc_weight=1, ic_weight=1, scheduler=None, method='equally-spaced-noisy', epsilon = None):
 
     loss_trace = []
     pde_loss_trace = []
@@ -191,7 +191,6 @@ def train(model, optimizer, num_iter, Forcing_functions, boundary_values, initia
         # evaluate the loss
 
         if equation == "Wave":
-
             total, pde, ic, bc, output_epoch = loss_wave(model=model, interior_grid=interior_grid,
                                                       x_span=x_span, t_span=t_span, Nic=Nic, Nbc=Nbc,
                                                       boundary_values=boundary_values, initial_value=initial_value,
@@ -201,14 +200,14 @@ def train(model, optimizer, num_iter, Forcing_functions, boundary_values, initia
                                                       ic_weight=ic_weight, method=method)
 
         elif equation == "KPP-Fisher":
-
             total, pde, ic, bc, output_epoch = loss_KPP(model=model, interior_grid=interior_grid,
                                                       x_span=x_span, t_span=t_span, Nic=Nic, Nbc=Nbc,
                                                       boundary_values=boundary_values, initial_value=initial_value,
                                                       Forcing_functions=Forcing_functions,
                                                       D=coeff, pde_weight=pde_weight, bc_weight=bc_weight,
                                                       ic_weight=ic_weight, method=method)
-
+        elif equation == "KPP-Fisher_nonlinear":
+            pass
         else:
             raise ValueError("input a valid equation name")
     
