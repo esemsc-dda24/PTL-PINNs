@@ -207,7 +207,12 @@ def train(model, optimizer, num_iter, Forcing_functions, boundary_values, initia
                                                       D=coeff, pde_weight=pde_weight, bc_weight=bc_weight,
                                                       ic_weight=ic_weight, method=method)
         elif equation == "KPP-Fisher_nonlinear":
-            pass
+            total, pde, ic, bc, output_epoch = loss_KPP_nonlinear(model=model, interior_grid=interior_grid,
+                                                      x_span=x_span, t_span=t_span, Nic=Nic, Nbc=Nbc,
+                                                      boundary_values=boundary_values, initial_value=initial_value,
+                                                      Forcing_functions=Forcing_functions,
+                                                      D=coeff, pde_weight=pde_weight, bc_weight=bc_weight,
+                                                      ic_weight=ic_weight, method=method, epsilon=epsilon)
         else:
             raise ValueError("input a valid equation name")
     
@@ -288,3 +293,83 @@ def generate_boundary_tensor(Nbc, t_span, x, require_grad=True, method='equally-
 
     boundary_tensor = torch.cat([x_boundary, t_boundary], dim=1)  # (N_initial, 2)
     return (x_boundary, t_boundary, boundary_tensor)
+
+
+def loss_KPP_nonlinear(model, interior_grid, x_span, t_span, Nic, Nbc,
+         boundary_values, initial_value, Forcing_functions, epsilon,
+         D, pde_weight=1, bc_weight=1, ic_weight=1, method='equally-spaced-noisy'):
+    """
+    Calculate the loss function for the KPP-Fisher equation. Refer to:
+
+        - residual = dudt - D*d2udx2 - force  
+        - pde_loss = F.mse_loss(residual, torch.zeros_like(residual))
+    """
+
+    generator = Generator2D(grid=interior_grid, method=method,  xy_min=(x_span[0], t_span[0]), xy_max=(x_span[1], t_span[1]))
+    samples = generator.get_examples()
+
+    x_input = samples[0].unsqueeze(1).double().requires_grad_(True) # shape (N, 1)
+    t_input = samples[1].unsqueeze(1).double().requires_grad_(True) # shape (N, 1)
+    input = torch.cat([x_input, t_input], dim=1)  # shape (N, 2)
+
+    output, _ = model(input)  # shape (k,N,1)
+    u = output.squeeze(-1).T  # (N, k)
+
+    # compute the PDE residual
+    dudt = torch.cat([diff(u[:, i].reshape(-1, 1), t_input) for i in range(u.shape[1])], dim=1)  # shape (N, k)
+    d2udx2 = torch.cat([diff(u[:, i].reshape(-1, 1), x_input, order=2) for i in range(u.shape[1])], dim=1)  # shape (N, k)
+    force = torch.cat([Forcing_functions[i](input) for i in range(len(Forcing_functions))], dim=1)  # (N, k)
+    epsilon_tensor = torch.tensor(epsilon, dtype=u.dtype, device=u.device).reshape(1, -1)  # (1, k)
+    polynomial = epsilon_tensor * (u - u**2) 
+
+
+    residual = dudt - D*d2udx2 - force - polynomial
+    pde_loss = F.mse_loss(residual, torch.zeros_like(residual))
+
+    t_boundary_sample = Generator1D(size=Nbc, method='equally-spaced', t_min=t_span[0], t_max=t_span[1]).get_examples()
+    x_boundary_left = torch.zeros_like(t_boundary_sample).unsqueeze(1).requires_grad_()
+    x_boundary_right =x_span[1]*torch.ones_like(t_boundary_sample).unsqueeze(1).requires_grad_()
+    t_boundary = t_boundary_sample.unsqueeze(1).requires_grad_()
+    
+    input_boundary_left = torch.cat([x_boundary_left, t_boundary], dim=1).double()  # (Nbc, 2)
+    input_boundary_right = torch.cat([x_boundary_right, t_boundary], dim=1).double()  # (Nbc, 2)
+    # evaluate the neural network at the boundary
+    output_boundary_left, _ = model(input_boundary_left)  # (k, Nbc, 1)
+    output_boundary_right, _ = model(input_boundary_right)  # (k, Nbc, 1)
+    
+    boundary_val = torch.tensor(np.array(boundary_values), dtype=torch.double)
+    k = len(boundary_values)
+    
+    left_truth = boundary_val[:,0].view(k,1,1).expand(k,Nbc,1)  # left boundary value
+    right_truth = boundary_val[:,1].view(k,1,1).expand(k,Nbc,1)  # right boundary value
+    bc_loss = F.mse_loss(output_boundary_left, left_truth) + F.mse_loss(output_boundary_right, right_truth)
+
+    # initial conditions
+    x_initial_samples = Generator1D(size=Nic, method='equally-spaced', t_min=x_span[0], t_max=x_span[1]).get_examples()
+    x_initial = torch.cat([
+        x_initial_samples,
+    ]).unsqueeze(1)
+    t_initial = torch.cat([
+        torch.zeros_like(x_initial_samples),
+    ]).unsqueeze(1)
+    x_initial.requires_grad_()
+    t_initial.requires_grad_()
+    input_initial = torch.cat([x_initial, t_initial], dim=1)  # (N_initial, 2)
+    # evaluate the neural network at the initial conditions
+    output_initial, _ = model(input_initial)  # (k, N_initial, 2)
+
+    if isinstance(initial_value, (int, float)):
+        truth_initial = torch.ones_like(output_initial) * initial_value
+    elif isinstance(initial_value[0], (int, float)):
+        truth_initial = torch.ones_like(output_initial) * torch.tensor(np.array(initial_value)[:, np.newaxis])
+        truth_initial.to(output_initial.device)
+    # if the initial_value is a list of functions
+    else:
+        truth_initial = torch.stack([truth(input_initial) for truth in initial_value])  # (k, N_initial)
+    
+    ic_loss = F.mse_loss(output_initial, truth_initial)
+
+    # sum the weighted loss
+    total_loss = pde_weight * pde_loss + ic_weight * ic_loss + bc_weight * bc_loss
+
+    return total_loss, pde_loss, ic_loss, bc_loss, output[-1, ...]
