@@ -117,15 +117,3 @@ In our manuscript, we show how the training of the PTL-PINN is crucial to obtain
 ![Overdamped training](figures/overdamped_training.png)
 
 ---
-
-## Results
-
-We benchmark PTL-PINNs across a variety of ODEs and PDEs.
-
-For example, the solution for undamped, underdamped and overdamped oscillator is shown in the next image:
-
-![Canonical Oscillator Solution](figures/canonical_oscillator.jpg)
-
-Another of the ODEs we solve is the equilibrium-centered Lotka-Volterra equation:
-
-![Lotka-Volterra Solution](figures/lotka_volterra.jpg)
