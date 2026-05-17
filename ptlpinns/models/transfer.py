@@ -204,6 +204,43 @@ def compute_solution(H, W, N):
     return (H @ W).reshape(N, -1).T
 
 
+def compute_H_dict_random_init(training_log, N, bias, t_span):
+    """Compute H from a fresh, randomly initialised model with the same architecture as the trained model."""
+    from ptlpinns.models.model import Multihead_model_fourier
+    random_model = Multihead_model_fourier(
+        k=training_log['k'],
+        bias=training_log['bias'],
+        use_sine=training_log['use_sine'],
+        use_fourier=training_log['use_fourier'],
+        scale=training_log['scale'],
+        n_frequencies=training_log['n_frequencies'],
+        HIDDEN_LAYERS=training_log['hidden_layers'],
+    )
+    random_model.double()
+    return compute_H_dict(random_model, N, bias, t_span)
+
+
+def compute_H_dict_orthogonal(H_dict):
+    """Return a copy of H_dict where H has orthonormal columns (thin QR).
+
+    All derivative matrices (Ht, H_ic, Ht_ic, BHt) are transformed
+    consistently so the linear algebra of the transfer step remains valid.
+    If H = Q @ R then the new basis is Q and the mapping W -> R @ W preserves
+    the prediction H @ W = Q @ (R @ W).
+    """
+    import copy
+    d = copy.deepcopy(H_dict)
+    Q, R = np.linalg.qr(d['H'])   # Q: (2N, W) orthonormal, R: (W, W) upper triangular
+    R_inv = np.linalg.inv(R)
+    d['H']     = Q
+    d['Ht']    = d['Ht']    @ R_inv
+    d['H_ic']  = d['H_ic']  @ R_inv
+    d['Ht_ic'] = d['Ht_ic'] @ R_inv
+    B = np.array([[1, 0], [0, 1]])
+    d['BHt'] = compute_AH(B, d['Ht'])
+    return d
+
+
 def evaluate_MAE(transfer_model, numerical_solution, t_span, N):
     """
     Evaluate the Mean Absolute Error (MAE) between the model's prediction and the numerical solution.

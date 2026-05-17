@@ -474,3 +474,41 @@ def number_combinations(index_list: List[int]) -> int:
         denom *= factorial(count)
 
     return factorial(len(index_list)) // denom
+
+
+def compute_H_dict_random_init_kpp(k, IG, Nic, Nbc, bias, x_span, t_span, D, log):
+    """Compute PDE H_dict from a fresh, randomly initialised Multihead_model_PDE.
+
+    Parameters mirror those of compute_H_dict; k and bias determine the model
+    architecture, which must match the trained model being replaced.
+    """
+    from ptlpinns.models.model import Multihead_model_PDE
+    random_model = Multihead_model_PDE(k=k, bias=bias)
+    random_model.double()
+    return compute_H_dict(
+        model=random_model, IG=IG, Nic=Nic, Nbc=Nbc,
+        bias=bias, x_span=x_span, t_span=t_span, log=log, D=D,
+    )
+
+
+def compute_H_dict_orthogonal_kpp(H_dict, D):
+    """Return a copy of H_dict where H has orthonormal columns (thin QR).
+
+    All derivative and boundary matrices (H2x, Ht, H_ic, H_bc_left,
+    H_bc_right) are transformed consistently using the same R⁻¹ so the
+    linear system of the transfer step remains equivalent.  DH2x and
+    H_star are recomputed from the transformed matrices.
+    """
+    import copy
+    d = copy.deepcopy(H_dict)
+    Q, R = np.linalg.qr(d['H'])   # Q: (N_int, W) orthonormal columns
+    R_inv = np.linalg.inv(R)
+    d['H']           = Q
+    d['H2x']         = d['H2x']         @ R_inv
+    d['Ht']          = d['Ht']          @ R_inv
+    d['H_ic']        = d['H_ic']        @ R_inv
+    d['H_bc_left']   = d['H_bc_left']   @ R_inv
+    d['H_bc_right']  = d['H_bc_right']  @ R_inv
+    d['DH2x']        = D * d['H2x']
+    d['H_star']      = d['Ht'] - d['DH2x']
+    return d

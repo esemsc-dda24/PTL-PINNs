@@ -3,7 +3,6 @@ name = "ptlpinns"
 version = "1.0.0"
 description = "Perturbation-Guided Transfer Learning with Physics-Informed Neural Networks for Nonlinear Systems"
 readme = "README.md"
-requires-python ="~=3.9"
 license = {file = "LICENSE"}
 authors = [
   {name="Duarte Alexandrino"},
@@ -22,10 +21,11 @@ classifiers = [
 dependencies = [
   "numpy>=1.24.2",
   "scipy>=1.10.1",
-  "matplotlib>=3.7.1",
-  "torch>=2.0.0",                  
-  "neurodiffeq>=0.5.3",            
-  "typing-extensions>=4.5.0"]
+  "matplotlib",
+  "torch>=2.0.0",       
+  "neurodiffeq>=0.5.3", 
+  "typing-extensions>=4.5.0",
+  "ipykernel"]
 
 [build-system]
 requires = ["hatchling"]
