@@ -118,3 +118,248 @@ def calc_w_n(w_list, xi, xi_dot, eta, t_eval):
     w_n = num / den
 
     return w_n
+    
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import numpy as np
+
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["DejaVu Serif"],
+    "mathtext.fontset": "cm",
+    "text.usetex": False,
+})
+
+def plot_lv_comparison(t_eval_lpm, t_eval_num, NN_TL_solution_LPM, x, y, epsilon_list):
+    # --- Style settings ---
+    label_fs  = 18
+    tick_fs   = 14
+    legend_fs = 14
+    cmap = cm.get_cmap("viridis", 3)
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+
+    # --- Define consistent colors for (xi,x) and (eta,y) ---
+    color_xi  = cm.viridis(0.15)  # i = 0
+    color_eta = cm.viridis(0.55)  # i = 1
+
+    # --- Numerical reference first (lighter colors) ---
+    ax.plot(
+        t_eval_num,
+        x,
+        label="$x$",
+        color=color_xi,
+        linewidth=2.0,
+        alpha=0.7,
+        zorder=1,
+    )
+
+    ax.plot(
+        t_eval_num,
+        y,
+        label="$y$",
+        color=color_eta,
+        linewidth=2.0,
+        alpha=0.7,
+        zorder=1,
+    )
+
+    # --- PTL-PINN approximations last (bolder dashed lines) ---
+    ax.plot(
+        t_eval_lpm,
+        1 + epsilon_list[0] * NN_TL_solution_LPM[:, 0],
+        label=r"$1 + \varepsilon \xi$",
+        color=color_xi,
+        linewidth=2.4,
+        linestyle=(0, (6, 3)),  # longer dashes
+        marker="o",
+        markersize=4.5,
+        markevery=100,
+        alpha=0.95,
+        zorder=3,
+    )
+
+    ax.plot(
+        t_eval_lpm,
+        1 + epsilon_list[0] * NN_TL_solution_LPM[:, 1],
+        label=r"$1 + \varepsilon \eta$",
+        color=color_eta,
+        linewidth=2.4,
+        linestyle=(0, (6, 3)),  
+        marker="s",
+        markersize=4.5,
+        markevery=100,
+        alpha=0.95,
+        zorder=3,
+    )
+
+    # --- Axis labels and ticks ---
+    ax.set_xlabel("t", fontsize=label_fs, labelpad=6)
+    ax.set_ylabel("Solution", fontsize=label_fs, labelpad=8)
+    ax.tick_params(axis="both", labelsize=tick_fs)
+
+    # --- Legend on top ---
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.25),
+        ncol=2,
+        fontsize=legend_fs,
+        frameon=False,
+        handlelength=2.8,
+        markerscale=1.2,
+        labelspacing=0.4,
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+def calculate_error(w_sol, perturbation_solution_LPM, epsilon, alpha_list, t_span, N, ode, x0, y0, plot=True, refine=200):
+    """
+    Mean absolute error of the cumulative PTL-PINN prey trajectory against a
+    high-accuracy numerical reference, computed per perturbation order.
+
+    Parameters
+    ----------
+    plot : bool, default True
+        If True, show per-order comparison plots (kept for backward compatibility).
+    refine : int
+        Sub-sampling factor used for the numerical reference grid.
+
+    Returns
+    -------
+    error : list[float]
+        MAE for orders 0, 1, ..., p (length == len(w_sol[0])).
+    """
+    w_final = []
+    xi_final = []
+    error = []
+
+    for i in range(len(w_sol[0])):
+
+        if i == 0:
+            w_loop = np.sqrt(alpha_list[0])
+            xi_loop = perturbation_solution_LPM[0][:, 0]
+        else:
+            w_loop = w_final[i - 1] + (epsilon ** i) * w_sol[0][i]
+            xi_loop = xi_final[i - 1] + (epsilon ** i) * perturbation_solution_LPM[i][:, 0]
+
+        w_final.append(w_loop)
+        xi_final.append(xi_loop)
+
+        t_span_loop = (0, t_span[-1] / w_loop)
+        t_eval_loop_ptl = np.linspace(t_span_loop[0], t_span_loop[1], N)
+        t_eval_loop = np.linspace(t_span_loop[0], t_span_loop[1], (t_eval_loop_ptl.size - 1) * refine + 1)
+        sol_loop = numerical.solve_ode_equation(ode, t_span_loop, t_eval_loop, [x0, y0])
+        x_loop, _ = sol_loop
+
+        error.append(np.mean(np.abs(1 + epsilon * xi_loop - x_loop[::refine])))
+
+        if plot:
+            plt.plot(t_eval_loop, x_loop)
+            plt.plot(t_eval_loop_ptl, 1 + epsilon * xi_loop)
+            plt.show()
+
+    return error
+
+
+def compute_error_per_order(H_dict, training_log, epsilon, alpha, ic, p_max,
+                            ode, x0, y0, t_eval, t_span, N, refine=200):
+    """
+    End-to-end pipeline: given a basis ``H_dict`` (pretrained PINN, randomly
+    initialised network, Fourier features, ...), compute the Lindstedt-Poincaré
+    perturbation solution up to order ``p_max`` and return the MAE of the
+    cumulative prey trajectory at every order.
+
+    The function is the building block used to compare basis/hyperparameter
+    choices on the same Lotka-Volterra problem.
+
+    Returns
+    -------
+    error : list[float]
+        MAE for orders 0, 1, ..., p_max.
+    w_sol : list[list[float]]
+        The frequency-correction series produced by the LPM solve.
+    """
+    from ptlpinns.models import transfer  # local import avoids circular deps
+
+    w_sol = []
+    _, perturbation_solution, _ = transfer.compute_perturbation_solution_LKV(
+        beta_list=[epsilon],
+        p_list=[p_max],
+        ic_list=[ic],
+        alpha_list=[alpha],
+        H_dict=H_dict,
+        t_eval=t_eval,
+        training_log=training_log,
+        all_p=False,
+        comp_time=False,
+        w_sol=w_sol,
+    )
+
+    error = calculate_error(
+        w_sol, perturbation_solution, epsilon, [alpha],
+        t_span, N, ode, x0, y0, plot=False, refine=refine,
+    )
+    return error, w_sol
+
+
+def plot_mae_vs_order(errors_by_label, title=None, save_path=None,
+                      figsize=(15, 9)):
+    """
+    Comparison plot of Mean Absolute Error vs perturbation order for several
+    basis / hyperparameter configurations.
+
+    Parameters
+    ----------
+    errors_by_label : dict[str, list[float]]
+        Mapping from configuration label to list of MAE values (one entry per
+        perturbation order, starting at order 0).
+    title : str, optional
+        Optional figure title.
+    save_path : str, optional
+        If given, save the figure to this path before showing it.
+    figsize : tuple, default (15, 9)
+        Matplotlib figure size in inches.
+    """
+    label_fs = 18
+    tick_fs = 14
+    legend_fs = 12
+
+    cmap = mpl.cm.get_cmap("viridis")
+    n = max(len(errors_by_label), 2)
+    colors = [cmap(0.05 + 0.9 * i / (n - 1)) for i in range(n)]
+    markers = ["o", "s", "D", "^", "v", "P", "X", "*", "h", "<", ">"]
+    linestyles = ["-", "--", "-.", ":"]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for i, (label, errs) in enumerate(errors_by_label.items()):
+        orders = np.arange(len(errs))
+        ax.semilogy(
+            orders,
+            errs,
+            marker=markers[i % len(markers)],
+            linestyle=linestyles[i % len(linestyles)],
+            linewidth=2.4,
+            markersize=9,
+            color=colors[i],
+            label=label,
+        )
+
+    max_p = max(len(v) for v in errors_by_label.values())
+    ax.set_xticks(np.arange(max_p))
+    ax.set_xlabel(r"Perturbation order $p$", fontsize=label_fs)
+    ax.set_ylabel("Mean absolute error", fontsize=label_fs)
+    ax.tick_params(labelsize=tick_fs)
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend(
+        frameon=False, fontsize=legend_fs,
+        loc="center left", bbox_to_anchor=(1.02, 0.5),
+        handlelength=2.6, labelspacing=0.6,
+    )
+    if title is not None:
+        ax.set_title(title, fontsize=label_fs)
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.show()
+    return fig, ax

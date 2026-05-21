@@ -42,9 +42,163 @@ def compute_H_dict(model, N, bias, t_span):
     # define the matrices A
     B = np.array([[1, 0], [0, 1]])
     BHt = compute_AH(B, Ht)  # shape (2N, W)
-    H_dict = {'H': H, 'H_ic': H_ic, 'Ht': Ht, 'Ht_ic': Ht_ic, 'N': N,
-              'BHt': BHt}
+
+    # ------------------------------------------------------------------ #
+    # Precompute constant Gram matrices so that compute_TL / compute_TL_LKV
+    # can assemble  H_star.T @ H_star  via O(W²) scalar-weighted sums
+    # instead of an O(N·W²) matmul on every iteration.
+    #
+    # H_star = BHt + AH,  where
+    #   AH_even = a00*H_even + a01*H_odd
+    #   AH_odd  = a10*H_even + a11*H_odd
+    #
+    # H_star.T @ H_star expands to:
+    #   G_BtBt
+    #   + a00*(G_Be_e + G_Be_e.T) + a01*(G_Be_o + G_Be_o.T)
+    #   + a10*(G_Bo_e + G_Bo_e.T) + a11*(G_Bo_o + G_Bo_o.T)
+    #   + (a00²+a10²)*G_ee
+    #   + (a00*a01+a10*a11)*(G_eo + G_eo.T)
+    #   + (a01²+a11²)*G_oo
+    # ------------------------------------------------------------------ #
+    H_even   = H[0::2, :]      # (N, W)
+    H_odd    = H[1::2, :]      # (N, W)
+    BHt_even = BHt[0::2, :]   # (N, W)
+    BHt_odd  = BHt[1::2, :]   # (N, W)
+
+    G_BtBt     = BHt.T @ BHt                              # W×W, constant
+    G_ee       = H_even.T @ H_even                        # W×W, constant
+    G_oo       = H_odd.T @ H_odd                          # W×W, constant
+    G_sym_eo   = H_even.T @ H_odd + H_odd.T @ H_even      # W×W, symmetric
+    G_sym_Be_e = BHt_even.T @ H_even + H_even.T @ BHt_even  # W×W, symmetric
+    G_sym_Be_o = BHt_even.T @ H_odd  + H_odd.T @ BHt_even   # W×W, symmetric
+    G_sym_Bo_e = BHt_odd.T @ H_even  + H_even.T @ BHt_odd   # W×W, symmetric
+    G_sym_Bo_o = BHt_odd.T @ H_odd   + H_odd.T @ BHt_odd    # W×W, symmetric
+    G_ic       = H_ic.T @ H_ic                             # W×W, constant
+
+    H_dict = {
+        'H': H, 'H_ic': H_ic, 'Ht': Ht, 'Ht_ic': Ht_ic, 'N': N, 'BHt': BHt,
+        # precomputed Gram matrices
+        'G_BtBt': G_BtBt,
+        'G_ee': G_ee, 'G_oo': G_oo, 'G_sym_eo': G_sym_eo,
+        'G_sym_Be_e': G_sym_Be_e, 'G_sym_Be_o': G_sym_Be_o,
+        'G_sym_Bo_e': G_sym_Bo_e, 'G_sym_Bo_o': G_sym_Bo_o,
+        'G_ic': G_ic,
+    }
     return H_dict
+
+def compute_H_dict_fourier(N, bias, t_span, n_modes=64, orthogonalize=True):
+    """
+    Build H_dict from a fixed Fourier feature basis — no neural network required.
+
+    Features are sin(2π k t / T) and cos(2π k t / T) for k = 1..n_modes,
+    evaluated at N equally-spaced points.  Their time derivatives are computed
+    analytically, so Ht contains no discretisation error.
+
+    When ``orthogonalize`` is True (default), the 2*n_modes raw features are
+    QR-orthogonalised using the interior grid.  Because Q has orthonormal
+    columns, H_even^T H_even = I and H_odd^T H_odd = I (before the optional
+    bias column), giving G_ee = G_oo = I — the best possible conditioning for
+    the Gram solve.  The same rotation R^{-1} is applied consistently to dPhi,
+    Phi_ic and dPhi_ic so the entire H_dict is self-consistent.
+
+    When ``orthogonalize`` is False, the raw (un-orthogonalised) sin/cos
+    features are used directly.  This is closer to "classical" Fourier
+    transfer learning where no preconditioning of the basis is performed, and
+    is useful as an ablation against the QR-orthogonalised variant.
+
+    Feature assignment mirrors compute_H_dict:
+        even rows of H  (component 0)  <-  first  n_modes features
+        odd  rows of H  (component 1)  <-  second n_modes features
+
+    Intended as a no-pretraining baseline: drop-in replacement for the H_dict
+    produced by compute_H_dict, compatible with compute_TL_LKV and
+    compute_perturbation_solution_LKV.
+
+    Parameters
+    ----------
+    N             : number of interior collocation points
+    bias          : if True, append a bias column (ones to H/H_ic, zeros to Ht/Ht_ic)
+    t_span        : (t0, T)
+    n_modes       : number of Fourier frequencies; when ``orthogonalize`` is
+                    True it is clipped to N//2 so the QR is full-rank.
+    orthogonalize : if True, QR-orthogonalise the basis; if False, use raw
+                    sin/cos features.
+    """
+    if orthogonalize:
+        n_modes = min(n_modes, N // 2)
+
+    T  = t_span[1] - t_span[0]
+    t0 = t_span[0]
+    omegas = 2.0 * np.pi * np.arange(1, n_modes + 1) / T
+
+    def _raw_features(t_grid):
+        """Raw sin/cos features and their exact time derivatives."""
+        tau  = (t_grid - t0)[:, None] * omegas[None, :]          # (M, n_modes)
+        Phi  = np.concatenate([np.sin(tau), np.cos(tau)],   1)   # (M, 2*n_modes)
+        dPhi = np.concatenate([omegas * np.cos(tau),
+                               -omegas * np.sin(tau)],       1)
+        return Phi, dPhi
+
+    t_vals = np.linspace(t_span[0], t_span[1], N)
+    t_ic   = np.array([t_span[0]])
+
+    Phi,    dPhi    = _raw_features(t_vals)   # (N, 2*n_modes)
+    Phi_ic, dPhi_ic = _raw_features(t_ic)     # (1, 2*n_modes)
+
+    if orthogonalize:
+        # QR on interior: Phi = Q R  =>  Q = Phi @ R^{-1}
+        # N >= 2*n_modes is guaranteed, so R is square and invertible.
+        Q, R  = np.linalg.qr(Phi, mode='reduced')        # Q: (N, 2k), R: (2k, 2k)
+        R_inv = np.linalg.solve(R, np.eye(R.shape[0]))
+
+        Phi_orth     = Q                     # (N, 2*n_modes), orthonormal columns
+        dPhi_orth    = dPhi    @ R_inv       # (N, 2*n_modes)
+        Phi_ic_orth  = Phi_ic  @ R_inv       # (1, 2*n_modes)
+        dPhi_ic_orth = dPhi_ic @ R_inv       # (1, 2*n_modes)
+    else:
+        # Raw (un-orthogonalised) sin/cos features.
+        Phi_orth     = Phi
+        dPhi_orth    = dPhi
+        Phi_ic_orth  = Phi_ic
+        dPhi_ic_orth = dPhi_ic
+
+    # Split features between the two ODE components and interleave to match
+    # the (2N, W) layout produced by compute_H_dict.
+    #   row 2i   <- first  n_modes features at t_i  (component 0)
+    #   row 2i+1 <- second n_modes features at t_i  (component 1)
+    W = n_modes   # features per component
+    H     = Phi_orth[:, :2*W].reshape(2 * N, W)
+    Ht    = dPhi_orth[:, :2*W].reshape(2 * N, W)
+    H_ic  = Phi_ic_orth[:, :2*W].reshape(2, W)
+    Ht_ic = dPhi_ic_orth[:, :2*W].reshape(2, W)
+
+    if bias:
+        H     = np.hstack((H,    np.ones ((H.shape[0],    1))))
+        H_ic  = np.hstack((H_ic, np.ones ((H_ic.shape[0], 1))))
+        Ht    = np.hstack((Ht,   np.zeros((Ht.shape[0],   1))))
+        Ht_ic = np.hstack((Ht_ic, np.zeros((Ht_ic.shape[0], 1))))
+
+    B   = np.array([[1, 0], [0, 1]])
+    BHt = compute_AH(B, Ht)
+
+    H_even   = H[0::2, :]
+    H_odd    = H[1::2, :]
+    BHt_even = BHt[0::2, :]
+    BHt_odd  = BHt[1::2, :]
+
+    return {
+        'H': H, 'H_ic': H_ic, 'Ht': Ht, 'Ht_ic': Ht_ic, 'N': N, 'BHt': BHt,
+        'G_BtBt':     BHt.T @ BHt,
+        'G_ee':       H_even.T @ H_even,
+        'G_oo':       H_odd.T @ H_odd,
+        'G_sym_eo':   H_even.T @ H_odd + H_odd.T @ H_even,
+        'G_sym_Be_e': BHt_even.T @ H_even + H_even.T @ BHt_even,
+        'G_sym_Be_o': BHt_even.T @ H_odd  + H_odd.T @ BHt_even,
+        'G_sym_Bo_e': BHt_odd.T @ H_even  + H_even.T @ BHt_odd,
+        'G_sym_Bo_o': BHt_odd.T @ H_odd   + H_odd.T @ BHt_odd,
+        'G_ic':       H_ic.T @ H_ic,
+    }
+
 
 def compute_Ht(H, t):
     output = []
@@ -72,6 +226,28 @@ def generate_eval_tensor(N=512, t_span=(0, 1), require_grad=True):
     if require_grad:
         t.requires_grad_()
     return t
+
+def _gram_H_star(A, H_dict):
+    """Return H_star.T @ H_star using precomputed W×W Gram matrices.
+
+    Expands (BHt + AH).T (BHt + AH) with
+        AH_even = a00*H_even + a01*H_odd
+        AH_odd  = a10*H_even + a11*H_odd
+    giving an O(W²) operation instead of the O(N·W²) explicit matmul.
+    """
+    a00, a01 = A[0, 0], A[0, 1]
+    a10, a11 = A[1, 0], A[1, 1]
+    return (
+        H_dict['G_BtBt']
+        + a00 * H_dict['G_sym_Be_e']
+        + a01 * H_dict['G_sym_Be_o']
+        + a10 * H_dict['G_sym_Bo_e']
+        + a11 * H_dict['G_sym_Bo_o']
+        + (a00 ** 2 + a10 ** 2) * H_dict['G_ee']
+        + (a00 * a01 + a10 * a11) * H_dict['G_sym_eo']
+        + (a01 ** 2 + a11 ** 2) * H_dict['G_oo']
+    )
+
 
 def compute_perturbation_solution(w_0_list, zeta_list, beta_list, p_list, ic_list, forcing_list, H_dict, t_eval, training_log, all_p=False, comp_time=False, solver="LPM", w_sol = [], power=[(3, 1)], invert=True):
 
@@ -155,11 +331,10 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     H_star = H_dict["BHt"] + AH
     H_dict["H_star"] = H_star
     N = H_dict['N']
-    H_ic_0 = H_dict['H_ic']
     start_time = time.perf_counter()
 
     if invert:
-        M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
+        M = w_ode * _gram_H_star(A, H_dict) / N + w_ic * H_dict['G_ic']  # shape (W, W)
         Minv = np.linalg.pinv(M)
         H_dict["M_inv"] = Minv
 
@@ -172,7 +347,7 @@ def compute_TL(w_0, zeta, ic, forcing_function, w_ode, w_ic, H_dict, t=None, inv
     H_dict["Rf"] = Rf
 
     # initial condition
-    Ric = w_ic * ((ic * H_ic_0.T).sum(axis=1)).reshape(-1, 1)
+    Ric = w_ic * ((ic * H_dict['H_ic'].T).sum(axis=1)).reshape(-1, 1)
     H_dict["R_ic"] = Ric
 
     # compute W
@@ -263,18 +438,17 @@ def compute_TL_LKV(alpha, ic, w_ode, w_ic, H_dict, invert=True):
     H_star = H_dict["BHt"] + AH
     H_dict["H_star"] = H_star
     N = H_dict['N']
-    H_ic_0 = H_dict['H_ic']
     start_time = time.perf_counter()
 
     if invert:
-        M = w_ode * (H_star.T @ H_star) / N + w_ic * (H_ic_0.T @ H_ic_0)  # shape (W, W)
+        M = w_ode * _gram_H_star(A, H_dict) / N + w_ic * H_dict['G_ic']  # shape (W, W)
         Minv = np.linalg.pinv(M)
         H_dict["M_inv"] = Minv
 
     H_dict["Rf"] = 0
 
     # initial condition
-    Ric = w_ic * ((ic * H_ic_0.T).sum(axis=1)).reshape(-1, 1)
+    Ric = w_ic * ((ic * H_dict['H_ic'].T).sum(axis=1)).reshape(-1, 1)
     H_dict["R_ic"] = Ric
 
     # compute W

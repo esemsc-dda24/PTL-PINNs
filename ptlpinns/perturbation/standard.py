@@ -411,3 +411,55 @@ def plot_KG_solution(sol, c, t_eval, x_span, t_span, title="", w_lpm = 1):
     plt.ylabel('t')
     plt.title(title, fontsize=14, pad = 10)
     plt.show()
+
+
+def compute_error_per_order_standard(H_dict, training_log, w_0, zeta, epsilon,
+                                     p_max, ic, forcing_function, q, ode,
+                                     t_eval, refine=100):
+    """
+    End-to-end *standard* perturbation pipeline for the forced (over/under-
+    damped) Duffing-like oscillator:
+    compute the perturbation solution up to order ``p_max`` and return the
+    per-order MAE of the cumulative position estimate against a high-
+    resolution numerical reference.
+
+    Used to compare different basis (``H_dict``) / hyperparameter choices on
+    the same problem.
+
+    Returns
+    -------
+    error : list[float]
+        MAE for orders 0, 1, ..., p_max  (length p_max + 1).
+    """
+    from ptlpinns.models import transfer        # local import avoids cycles
+    from ptlpinns.odes import numerical
+
+    _, perturbation_solution, _ = transfer.compute_perturbation_solution(
+        w_0_list=[w_0],
+        zeta_list=[zeta],
+        beta_list=[epsilon],
+        p_list=[p_max],
+        ic_list=[ic],
+        forcing_list=[forcing_function],
+        H_dict=H_dict,
+        t_eval=t_eval,
+        training_log=training_log,
+        all_p=False,
+        comp_time=False,
+        solver="standard",
+        power=q,
+    )
+
+    perturbation = [p[:, 0] for p in perturbation_solution]
+    cumulative   = calculate_general_series(perturbation, epsilon)
+
+    t_eval_high = np.linspace(
+        t_eval[0], t_eval[-1], (t_eval.size - 1) * refine + 1,
+    )
+    x_ref_high = numerical.solve_ode_equation(
+        ode, (t_eval_high[0], t_eval_high[-1]), t_eval_high, ic,
+    )[0, :]
+    x_ref_low = x_ref_high[::refine]
+
+    return [float(np.mean(np.abs(cumulative[i] - x_ref_low)))
+            for i in range(len(cumulative))]

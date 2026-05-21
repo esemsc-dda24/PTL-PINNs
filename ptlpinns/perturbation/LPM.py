@@ -372,3 +372,69 @@ def plot_compare_1st_2nd_pass(numerical_1st_pass, numerical_2nd_pass, NN_TL_solu
 
     plt.tight_layout()
     plt.show()
+
+
+def compute_error_per_order_lpm(H_dict, training_log, w_0, zeta, epsilon, p_max,
+                                ic, forcing_function, q, ode, t_eval, t_span, N,
+                                refine=100, rwtol=0.0, check_divergence=False):
+    """
+    End-to-end Lindstedt-Poincaré pipeline for the 1D Duffing-like oscillator:
+    compute the perturbation solution up to order ``p_max`` and return the
+    MAE of the cumulative position estimate against a high-resolution
+    numerical reference, for every order p = 0, 1, ..., p_max.
+
+    Used to compare different basis (``H_dict``) / hyperparameter choices on
+    the same problem.
+
+    Returns
+    -------
+    error : list[float]
+        MAE for orders 0, 1, ..., p_max.
+    w_sol : list[list[float]]
+        Frequency correction series produced by the LPM solver.
+    """
+    from ptlpinns.models import transfer  # local import avoids cycles
+
+    w_sol = []
+    _, perturbation_solution, _ = transfer.compute_perturbation_solution(
+        w_0_list=[w_0],
+        zeta_list=[zeta],
+        beta_list=[epsilon],
+        p_list=[p_max],
+        ic_list=[ic],
+        forcing_list=[forcing_function],
+        H_dict=H_dict,
+        t_eval=t_eval,
+        training_log=training_log,
+        all_p=False,
+        comp_time=False,
+        solver="LPM",
+        w_sol=w_sol,
+        power=q,
+    )
+
+    w_series = calculate_w_series(
+        w_sol[0], epsilon, rwtol=rwtol, check_divergence=check_divergence,
+    )
+
+    xi_final = []
+    error = []
+    for i, w_loop in enumerate(w_series):
+        if i == 0:
+            xi_loop = perturbation_solution[0][:, 0]
+        else:
+            xi_loop = xi_final[-1] + (epsilon ** i) * perturbation_solution[i][:, 0]
+        xi_final.append(xi_loop)
+
+        t_span_loop = (0, t_span[-1] / w_loop)
+        t_eval_loop_ptl = np.linspace(t_span_loop[0], t_span_loop[1], N)
+        t_eval_loop = np.linspace(
+            t_span_loop[0], t_span_loop[1],
+            (t_eval_loop_ptl.size - 1) * refine + 1,
+        )
+        x_loop = numerical.solve_ode_equation(
+            ode, (t_eval_loop[0], t_eval_loop[-1]), t_eval_loop, ic,
+        )[0, :]
+        error.append(np.mean(np.abs(xi_loop - x_loop[::refine])))
+
+    return error, w_sol

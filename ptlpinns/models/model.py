@@ -77,13 +77,16 @@ class Multihead_model_fourier(nn.Module):
     
 
 class Multihead_model_PDE(nn.Module):
-    def __init__(self, k, act=nn.Tanh(), bias=False):
+    def __init__(self, k, act=nn.Tanh(), bias=False, hidden_layers=[100, 100, 350]):
         super().__init__()
         self.act = act
-        self.linear1 = nn.Linear(2, 100)
-        self.linear3 = nn.Linear(100,100) 
-        self.linear4 = nn.Linear(100, 350)
-        self.final_layers = nn.ModuleList([nn.Linear(350, 1, bias=bias) for _ in range(k)])
+        self.hidden_layers = hidden_layers
+        self.linear1 = nn.Linear(2, hidden_layers[0])
+        self.linear3 = nn.Linear(hidden_layers[0], hidden_layers[1])
+        self.linear4 = nn.Linear(hidden_layers[1], hidden_layers[2])
+        self.final_layers = nn.ModuleList(
+            [nn.Linear(hidden_layers[2], 1, bias=bias) for _ in range(k)]
+        )
         self.k = k
         self.double()
 

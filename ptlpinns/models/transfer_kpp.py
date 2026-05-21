@@ -440,6 +440,126 @@ def compute_perturbation_solution_polynomial_complete(p, epsilon, forcing, H_dic
     return NN_TL_solution, TL_time
 
 
+def compute_perturbation_solution_polynomial_orders(p, epsilon, forcing, H_dict, input,
+                                                    training_log, Polynomial,
+                                                    boundary_functions=None,
+                                                    boundary_values=None,
+                                                    ic_function=None, ic_value=None):
+    """
+    Same logic as ``compute_perturbation_solution_polynomial_complete`` but
+    returns the cumulative PTL-PINN solution at every perturbation order
+    ``p = 0, 1, ..., p_max``.
+
+    Returns
+    -------
+    cumulative : list[np.ndarray]
+        ``cumulative[p]`` is the cumulative solution
+        :math:`\\sum_{k=0}^{p} \\varepsilon^k u_k`, with shape (N_interior, 1).
+    TL_time : float
+        Total wall time spent in the transfer-learning solves.
+    """
+    perturbation_solution = []
+    TL_time = 0.0
+    for j in range(p + 1):
+        if j == 0:
+            _, H_dict = compute_R_ic(
+                H_dict, w_ic=10, log=training_log,
+                ic_function=ic_function, ic_value=ic_value,
+            )
+            _, _, _, H_dict = compute_R_bcs(
+                H_dict, boundary_functions=boundary_functions,
+                boundary_values=boundary_values,
+                w_bc=training_log['w_bc'], log=training_log,
+            )
+            W, t_iter = compute_TL_with_F(
+                forcing_function=forcing, w_pde=training_log["w_pde"],
+                H_dict=H_dict, input=input,
+            )
+            perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+            H_dict['R_bcs'] = np.zeros_like(H_dict['R_bcs'])
+            TL_time += t_iter
+        else:
+            force_perturbation = 0
+            t_start = time.perf_counter()
+            for [p_k, k] in Polynomial:
+                if k == 0 and j == 1:
+                    force_perturbation -= p_k
+                if k != 0:
+                    force_function_index = force_func_perturbation_monomial(j - 1, k)
+                    for index_list in force_function_index:
+                        term = perturbation_solution[index_list[0]][:, 0].copy()
+                        for i in range(1, len(index_list) - 1):
+                            term *= perturbation_solution[index_list[i]][:, 0]
+                        force_perturbation -= index_list[-1] * p_k * term
+            TL_time += time.perf_counter() - t_start
+
+            W, t_iter = compute_TL_with_F(
+                forcing_function=force_perturbation,
+                w_pde=training_log["w_pde"], H_dict=H_dict, input=None,
+            )
+            perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+            TL_time += t_iter
+
+    cumulative = []
+    running = np.zeros_like(perturbation_solution[0])
+    for k in range(p + 1):
+        running = running + (epsilon ** k) * perturbation_solution[k]
+        cumulative.append(running.copy())
+    return cumulative, TL_time
+
+
+def compute_error_per_order_kpp(model, IG, Nic, Nbc, bias, x_span, t_span,
+                                training_log, D, p_max, epsilon, forcing,
+                                Polynomial, ic_function, boundary_functions,
+                                input_interior, reference_solution):
+    """
+    End-to-end pipeline for the KPP-Fisher equation
+    :math:`u_t = D\\,u_{xx} + \\varepsilon\\,P(u) + F`
+    on top of a given network ``model``.  Builds the full ``H_dict``,
+    inverts the Gram matrix, runs the polynomial perturbation series up to
+    order ``p_max``, and returns the MAE of the cumulative solution at
+    every order against ``reference_solution`` (shape ``(Nx, Nt)``).
+
+    Returns
+    -------
+    error : list[float]
+        MAE for orders 0, 1, ..., p_max.
+    H_dict : dict
+        The constructed H_dict (kept so the caller can read ``cond(H)`` etc.).
+    """
+    H_dict = compute_H_dict(
+        model=model, IG=IG, Nic=Nic, Nbc=Nbc, bias=bias,
+        x_span=x_span, t_span=t_span, log=training_log, D=D,
+    )
+    _, _, _ = compute_M(
+        H_dict=H_dict,
+        w_pde=training_log['w_pde'],
+        w_ic=training_log['w_ic'],
+        w_bc=training_log['w_bc'],
+    )
+    _, H_dict = compute_R_ic(
+        H_dict, ic_function=ic_function, w_ic=training_log['w_ic'],
+        log=training_log,
+    )
+    _, _, _, H_dict = compute_R_bcs(
+        H_dict, boundary_functions=boundary_functions,
+        w_bc=training_log['w_bc'], log=training_log,
+    )
+
+    cumulative, _ = compute_perturbation_solution_polynomial_orders(
+        p_max, epsilon, forcing, H_dict=H_dict, input=input_interior,
+        training_log=training_log, Polynomial=Polynomial,
+        boundary_functions=boundary_functions, ic_function=ic_function,
+    )
+
+    Nx, Nt = IG
+    error = [
+        float(np.mean(np.abs(cumulative[k].reshape(Nx, Nt) - reference_solution)))
+        for k in range(len(cumulative))
+    ]
+    return error, H_dict
+
+
 def index_tuples(N: int, num_indices: int) -> List[List[int]]:
     """
     Generate all index tuples [i1, i2, ..., in] of length num_indices such that:
