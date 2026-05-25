@@ -62,10 +62,14 @@ def ptl_config(path: str) -> Dict[str, Any]:
         if (is_random + is_fixed) != 1:
             raise ValueError(f"Head {i}: 'forcing.coef' must be a list OR the string 'random'.")
 
+        # Optional per-head multiplier applied to random coefficients.
+        # Defaults to 1.0; set coef_scale: 10 in the YAML to get O(10) amplitudes.
+        coef_scale = float(forcing.get("coef_scale", 1.0))
+
         if is_random:
             m = len(freq)
             scale = 0.0 if m == 0 else 2.0 / m
-            coefs = list(rng.uniform(0.0, scale, size=m))
+            coefs = list(coef_scale * rng.uniform(0.0, scale, size=m))
         else:
             coefs = list(coef)
             if len(coefs) != len(freq):

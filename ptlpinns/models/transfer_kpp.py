@@ -414,6 +414,8 @@ def compute_perturbation_solution_polynomial_complete(p, epsilon, forcing, H_dic
                                                           H_dict=H_dict, input=input)
             perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
 
+            # higher-order corrections u_j (j>=1) satisfy homogeneous IC and BC
+            H_dict['R_ic'] = np.zeros_like(H_dict['R_ic'])
             H_dict['R_bcs'] = np.zeros_like(H_dict['R_bcs'])
         else:
             force_perturbation = 0
@@ -476,6 +478,8 @@ def compute_perturbation_solution_polynomial_orders(p, epsilon, forcing, H_dict,
                 H_dict=H_dict, input=input,
             )
             perturbation_solution.append(compute_solution(H_dict['H'], W, H_dict['N']).T)
+            # higher-order corrections u_j (j>=1) satisfy homogeneous IC and BC
+            H_dict['R_ic'] = np.zeros_like(H_dict['R_ic'])
             H_dict['R_bcs'] = np.zeros_like(H_dict['R_bcs'])
             TL_time += t_iter
         else:
