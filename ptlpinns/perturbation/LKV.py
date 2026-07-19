@@ -304,7 +304,7 @@ def compute_error_per_order(H_dict, training_log, epsilon, alpha, ic, p_max,
 
 
 def plot_mae_vs_order(errors_by_label, title=None, save_path=None,
-                      figsize=(15, 9)):
+                      figsize=(15, 9), color_overrides=None, grid=True):
     """
     Comparison plot of Mean Absolute Error vs perturbation order for several
     basis / hyperparameter configurations.
@@ -320,10 +320,17 @@ def plot_mae_vs_order(errors_by_label, title=None, save_path=None,
         If given, save the figure to this path before showing it.
     figsize : tuple, default (15, 9)
         Matplotlib figure size in inches.
+    color_overrides : dict[str, color], optional
+        Mapping from label to an explicit matplotlib colour, used to force the
+        colour of specific curves (e.g. a red baseline) instead of the
+        automatic viridis assignment.
+    grid : bool, default True
+        Whether to draw the background grid lines.
     """
     label_fs = 18
     tick_fs = 14
     legend_fs = 12
+    color_overrides = color_overrides or {}
 
     cmap = mpl.cm.get_cmap("viridis")
     n = max(len(errors_by_label), 2)
@@ -341,7 +348,7 @@ def plot_mae_vs_order(errors_by_label, title=None, save_path=None,
             linestyle=linestyles[i % len(linestyles)],
             linewidth=2.4,
             markersize=9,
-            color=colors[i],
+            color=color_overrides.get(label, colors[i]),
             label=label,
         )
 
@@ -350,7 +357,7 @@ def plot_mae_vs_order(errors_by_label, title=None, save_path=None,
     ax.set_xlabel(r"Perturbation order $p$", fontsize=label_fs)
     ax.set_ylabel("Mean absolute error", fontsize=label_fs)
     ax.tick_params(labelsize=tick_fs)
-    ax.grid(True, which="both", alpha=0.3)
+    ax.grid(grid, which="both", alpha=0.3)
     ax.legend(
         frameon=False, fontsize=legend_fs,
         loc="center left", bbox_to_anchor=(1.02, 0.5),
